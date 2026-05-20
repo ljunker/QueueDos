@@ -582,6 +582,11 @@ tr:hover {
   padding: 18px;
 }
 
+.ticket-form-fields {
+  display: grid;
+  gap: 14px;
+}
+
 .dialog-body header,
 .dialog-body footer {
   display: grid;

@@ -25,24 +25,31 @@ class AngularFrontendContractTest {
     fun atomicDesignStructureIsPresent() {
         assertTrue(projectFile("frontend/src/app/shared/atoms/badge.component.ts").isNotBlank())
         assertTrue(projectFile("frontend/src/app/shared/molecules/ticket-card.component.ts").isNotBlank())
+        assertTrue(projectFile("frontend/src/app/shared/molecules/ticket-form-fields.component.ts").isNotBlank())
+        assertTrue(projectFile("frontend/src/app/shared/molecules/workflow-transition-editor.component.ts").isNotBlank())
         assertTrue(projectFile("frontend/src/app/shared/organisms/board-view.component.ts").isNotBlank())
+        assertTrue(projectFile("frontend/src/app/shared/organisms/admin-projects-panel.component.ts").isNotBlank())
+        assertTrue(projectFile("frontend/src/app/shared/organisms/workspace-tab-host.component.ts").isNotBlank())
         assertTrue(projectFile("frontend/src/app/pages/workspace/workspace-page.component.ts").isNotBlank())
     }
 
     @Test
     fun migratedFeatureContractsArePresent() {
         val workspace = projectFile("frontend/src/app/pages/workspace/workspace-page.component.ts")
-        val admin = projectFile("frontend/src/app/shared/organisms/admin-view.component.ts")
+        val workflowPanel = projectFile("frontend/src/app/shared/organisms/admin-workflow-panel.component.ts")
         val board = projectFile("frontend/src/app/shared/organisms/board-view.component.ts")
         val ticketCard = projectFile("frontend/src/app/shared/molecules/ticket-card.component.ts")
         val detail = projectFile("frontend/src/app/shared/organisms/ticket-detail-view.component.ts")
+        val comments = projectFile("frontend/src/app/shared/organisms/ticket-comments-panel.component.ts")
 
         assertContains(workspace, "QueueActions.ticketDialogOpened")
         assertContains(workspace, "QueueActions.workflowSaveRequested")
-        assertContains(admin, "Workflow")
+        assertContains(workflowPanel, "qd-workflow-status-editor")
+        assertContains(workflowPanel, "qd-workflow-transition-editor")
         assertContains(ticketCard, "dragstart")
         assertContains(board, "ticketTransitioned")
         assertContains(detail, "commentSubmitted")
+        assertContains(comments, "commentSubmitted")
     }
 
     @Test

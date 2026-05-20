@@ -4,13 +4,11 @@ import { ActivatedRoute, ParamMap } from '@angular/router';
 import { Store } from '@ngrx/store';
 
 import { Priority, Ticket } from '../../core/api.models';
-import { AdminViewComponent } from '../../shared/organisms/admin-view.component';
-import { BoardViewComponent } from '../../shared/organisms/board-view.component';
 import { SidebarComponent } from '../../shared/organisms/sidebar.component';
-import { TicketDetailViewComponent } from '../../shared/organisms/ticket-detail-view.component';
 import { TicketDialogComponent } from '../../shared/organisms/ticket-dialog.component';
-import { TicketListViewComponent } from '../../shared/organisms/ticket-list-view.component';
 import { ToastComponent } from '../../shared/atoms/toast.component';
+import { WorkspaceTabHostComponent } from '../../shared/organisms/workspace-tab-host.component';
+import { WorkspaceToolbarComponent } from '../../shared/organisms/workspace-toolbar.component';
 import { QueueActions } from '../../state/queue.actions';
 import {
   selectActiveTab,
@@ -45,15 +43,7 @@ import { RouteWorkspaceState, TicketFilters, TicketSort, WorkspaceTab } from '..
 @Component({
   selector: 'qd-workspace-page',
   standalone: true,
-  imports: [
-    AdminViewComponent,
-    BoardViewComponent,
-    SidebarComponent,
-    TicketDetailViewComponent,
-    TicketDialogComponent,
-    TicketListViewComponent,
-    ToastComponent
-  ],
+  imports: [SidebarComponent, TicketDialogComponent, ToastComponent, WorkspaceTabHostComponent, WorkspaceToolbarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading() && !data()) {
@@ -78,79 +68,47 @@ import { RouteWorkspaceState, TicketFilters, TicketSort, WorkspaceTab } from '..
           (logoutRequested)="store.dispatch(logoutRequested())" />
 
         <section class="workspace">
-          <header class="toolbar">
-            <div>
-              <p class="eyebrow">{{ selectedProject()?.key ?? 'Project' }}</p>
-              <h2>{{ selectedProject()?.name ?? 'No project' }}</h2>
-            </div>
-            <button type="button" class="primary" [disabled]="!selectedProject()" (click)="openCreateDialog()">New ticket</button>
-          </header>
-
-          <section class="tab-panel">
-            @switch (activeTab()) {
-              @case ('board') {
-                <qd-board-view
-                  [workflow]="workflow()"
-                  [statuses]="statuses()"
-                  [tickets]="projectTickets()"
-                  [types]="projectTypes()"
-                  [users]="users()"
-                  [currentRole]="currentUser()?.role ?? 'MEMBER'"
-                  (ticketOpened)="openTicket($event)"
-                  (ticketTransitioned)="transitionTicket($event)"
-                  (transitionDenied)="showToast('This workflow transition is not allowed.')" />
-              }
-              @case ('list') {
-                <qd-ticket-list-view
-                  [tickets]="visibleTickets()"
-                  [filters]="filters()"
-                  [statuses]="statuses()"
-                  [workflow]="workflow()"
-                  [types]="projectTypes()"
-                  [priorities]="priorities()"
-                  [users]="activeUsers()"
-                  [allUsers]="users()"
-                  (filtersChanged)="changeFilters($event)"
-                  (ticketOpened)="openTicket($event)" />
-              }
-              @case ('detail') {
-                <qd-ticket-detail-view
-                  [ticket]="selectedTicket()"
-                  [comments]="selectedTicketComments()"
-                  [changes]="selectedTicketChanges()"
-                  [workflow]="workflow()"
-                  [types]="projectTypes()"
-                  [users]="users()"
-                  (closed)="store.dispatch(detailClosed())"
-                  (editRequested)="openEditDialog($event)"
-                  (commentSubmitted)="createComment($event)" />
-              }
-              @case ('admin') {
-                @if (isAdmin()) {
-                  <qd-admin-view
-                    [projects]="projects()"
-                    [selectedProject]="selectedProject()"
-                    [tickets]="data()?.tickets ?? []"
-                    [users]="users()"
-                    [projectTypes]="projectTypes()"
-                    [workflowDraft]="workflowDraft()"
-                    (projectCreated)="store.dispatch(projectCreateRequested({ request: $event }))"
-                    (projectSelected)="dispatchProjectSelected($event)"
-                    (userCreated)="store.dispatch(userCreateRequested({ request: $event }))"
-                    (userToggled)="store.dispatch(userUpdateRequested({ userId: $event.userId, request: { active: $event.active } }))"
-                    (ticketTypeCreated)="store.dispatch(ticketTypeCreateRequested({ request: $event }))"
-                    (ticketTypeDeleted)="store.dispatch(ticketTypeDeleteRequested({ typeId: $event }))"
-                    (statusAdded)="store.dispatch(workflowStatusAdded())"
-                    (statusPatched)="store.dispatch(workflowStatusPatched($event))"
-                    (statusRemoved)="store.dispatch(workflowStatusRemoved({ index: $event }))"
-                    (transitionAdded)="store.dispatch(workflowTransitionAdded())"
-                    (transitionPatched)="store.dispatch(workflowTransitionPatched($event))"
-                    (transitionRemoved)="store.dispatch(workflowTransitionRemoved({ index: $event }))"
-                    (workflowSaved)="saveWorkflow()" />
-                }
-              }
-            }
-          </section>
+          <qd-workspace-toolbar [project]="selectedProject()" (newTicketRequested)="openCreateDialog()" />
+          <qd-workspace-tab-host
+            [data]="data()"
+            [activeTab]="activeTab()"
+            [isAdmin]="isAdmin()"
+            [projects]="projects()"
+            [selectedProject]="selectedProject()"
+            [currentUser]="currentUser()"
+            [users]="users()"
+            [activeUsers]="activeUsers()"
+            [workflow]="workflow()"
+            [statuses]="statuses()"
+            [projectTickets]="projectTickets()"
+            [visibleTickets]="visibleTickets()"
+            [projectTypes]="projectTypes()"
+            [priorities]="priorities()"
+            [filters]="filters()"
+            [selectedTicket]="selectedTicket()"
+            [selectedTicketComments]="selectedTicketComments()"
+            [selectedTicketChanges]="selectedTicketChanges()"
+            [workflowDraft]="workflowDraft()"
+            (ticketOpened)="openTicket($event)"
+            (ticketTransitioned)="transitionTicket($event)"
+            (transitionDenied)="showToast('This workflow transition is not allowed.')"
+            (filtersChanged)="changeFilters($event)"
+            (detailClosed)="store.dispatch(detailClosed())"
+            (editRequested)="openEditDialog($event)"
+            (commentSubmitted)="store.dispatch(commentCreateRequested($event))"
+            (projectCreated)="store.dispatch(projectCreateRequested({ request: $event }))"
+            (projectSelected)="dispatchProjectSelected($event)"
+            (userCreated)="store.dispatch(userCreateRequested({ request: $event }))"
+            (userUpdated)="store.dispatch(userUpdateRequested($event))"
+            (ticketTypeCreated)="store.dispatch(ticketTypeCreateRequested({ request: $event }))"
+            (ticketTypeDeleted)="store.dispatch(ticketTypeDeleteRequested({ typeId: $event }))"
+            (statusAdded)="store.dispatch(workflowStatusAdded())"
+            (statusPatched)="store.dispatch(workflowStatusPatched($event))"
+            (statusRemoved)="store.dispatch(workflowStatusRemoved({ index: $event }))"
+            (transitionAdded)="store.dispatch(workflowTransitionAdded())"
+            (transitionPatched)="store.dispatch(workflowTransitionPatched($event))"
+            (transitionRemoved)="store.dispatch(workflowTransitionRemoved({ index: $event }))"
+            (workflowSaved)="saveWorkflow()" />
         </section>
 
         <qd-ticket-dialog
@@ -205,6 +163,7 @@ export class WorkspacePageComponent {
 
   protected readonly logoutRequested = QueueActions.logoutRequested;
   protected readonly detailClosed = QueueActions.detailClosed;
+  protected readonly commentCreateRequested = QueueActions.commentCreateRequested;
   protected readonly projectCreateRequested = QueueActions.projectCreateRequested;
   protected readonly userCreateRequested = QueueActions.userCreateRequested;
   protected readonly userUpdateRequested = QueueActions.userUpdateRequested;
@@ -254,10 +213,6 @@ export class WorkspacePageComponent {
 
   protected changeFilters(filters: Partial<TicketFilters>): void {
     this.store.dispatch(QueueActions.filtersChanged({ filters }));
-  }
-
-  protected createComment(event: { ticketId: string; body: string }): void {
-    this.store.dispatch(QueueActions.commentCreateRequested({ ticketId: event.ticketId, request: { body: event.body } }));
   }
 
   protected showToast(message: string): void {

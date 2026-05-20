@@ -13,11 +13,13 @@ import {
 } from '../../core/api.models';
 import { sortedStatuses } from '../../state/queue.selectors';
 import { TicketDialogSave } from '../../state/queue.models';
+import { TicketFormFieldsComponent } from '../molecules/ticket-form-fields.component';
+import { TicketFormGroup } from '../models/ticket-form.model';
 
 @Component({
   selector: 'qd-ticket-dialog',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, TicketFormFieldsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (open()) {
@@ -29,65 +31,12 @@ import { TicketDialogSave } from '../../state/queue.models';
               <button type="button" class="icon-button" aria-label="Close" (click)="closed.emit()">x</button>
             </header>
 
-            <label>
-              Title
-              <input formControlName="title" required>
-            </label>
-            <label>
-              Description
-              <textarea rows="5" formControlName="description"></textarea>
-            </label>
-
-            <div class="form-grid">
-              <label>
-                Labels
-                <input formControlName="labels" placeholder="bug, customer, blocked">
-              </label>
-              <label>
-                Due date
-                <input type="date" formControlName="dueDate">
-              </label>
-            </div>
-
-            <div class="form-grid">
-              <label>
-                Type
-                <select formControlName="typeId">
-                  @for (type of types(); track type.id) {
-                    <option [value]="type.id">{{ type.name }}</option>
-                  }
-                </select>
-              </label>
-              <label>
-                Priority
-                <select formControlName="priority">
-                  @for (priority of priorities(); track priority) {
-                    <option [value]="priority">{{ priority }}</option>
-                  }
-                </select>
-              </label>
-              <label>
-                Assignee
-                <select formControlName="assigneeId">
-                  <option value="">Unassigned</option>
-                  @for (user of users(); track user.id) {
-                    <option [value]="user.id">{{ user.displayName }}</option>
-                  }
-                </select>
-              </label>
-              <label>
-                Status
-                <select formControlName="statusId">
-                  @for (status of statuses(); track status.id) {
-                    <option [value]="status.id">{{ status.name }}</option>
-                  }
-                </select>
-              </label>
-              <label>
-                Estimate
-                <input type="number" min="0" max="999" step="1" formControlName="estimate">
-              </label>
-            </div>
+            <qd-ticket-form-fields
+              [form]="form"
+              [types]="types()"
+              [priorities]="priorities()"
+              [users]="users()"
+              [statuses]="statuses()" />
 
             <footer>
               @if (ticket() && isAdmin()) {
@@ -119,7 +68,7 @@ export class TicketDialogComponent {
   readonly saved = output<TicketDialogSave>();
   readonly deleteRequested = output<string>();
 
-  protected readonly form = new FormGroup({
+  protected readonly form: TicketFormGroup = new FormGroup({
     title: new FormControl('', { nonNullable: true, validators: [Validators.required] }),
     description: new FormControl('', { nonNullable: true }),
     labels: new FormControl('', { nonNullable: true }),
