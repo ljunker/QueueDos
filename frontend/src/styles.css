@@ -1,0 +1,229 @@
+:root {
+  color-scheme: light;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f6f7f9;
+  color: #111827;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button,
+select,
+input {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: inherit;
+}
+
+button {
+  min-height: 38px;
+  padding: 0 14px;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+  padding: 0 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff;
+}
+
+.app-main {
+  padding: 24px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.mark {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 8px;
+  background: #111827;
+  color: #fff;
+  font-weight: 900;
+}
+
+.primary {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.ghost {
+  background: #fff;
+}
+
+.auth-panel {
+  display: grid;
+  width: min(420px, calc(100vw - 32px));
+  margin: 80px auto;
+  gap: 24px;
+  padding: 28px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 24px 60px rgb(17 24 39 / 0.08);
+}
+
+.stack {
+  display: grid;
+  gap: 16px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #2563eb;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+  letter-spacing: 0;
+}
+
+.error {
+  margin: 0;
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.muted {
+  color: #6b7280;
+}
+
+.workspace-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.workspace-head label {
+  min-width: min(320px, 100%);
+}
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.column {
+  display: grid;
+  gap: 12px;
+  min-height: 260px;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.column header,
+.ticket-meta,
+.badges {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.column-body {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.ticket-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.type-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+@media (max-width: 720px) {
+  .app-header,
+  .app-main {
+    padding-inline: 16px;
+  }
+
+  .workspace-head {
+    display: grid;
+    align-items: stretch;
+  }
+}

@@ -1,0 +1,13 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      QUEUEDOS_DATA_FILE: /data/queuedos.json
+    volumes:
+      - queuedos-data:/data
+
+volumes:
+  queuedos-data:

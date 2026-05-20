@@ -1,0 +1,10 @@
+.gradle/
+build/
+data/
+.idea/
+*.iml
+*.log
+frontend/.angular/
+frontend/dist/
+frontend/node_modules/
+frontend/coverage/

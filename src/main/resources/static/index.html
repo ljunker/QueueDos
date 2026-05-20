@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>QueueDos</title>
+    <link rel="stylesheet" href="/style.css">
+  </head>
+  <body>
+    <main id="loginView" class="login-view">
+      <section class="login-panel" aria-labelledby="loginTitle">
+        <div>
+          <p class="eyebrow">QueueDos</p>
+          <h1 id="loginTitle">Issue tracking</h1>
+        </div>
+        <form id="loginForm" class="stack">
+          <label>
+            Email
+            <input id="loginEmail" type="email" autocomplete="username" value="admin@queuedos.local" required>
+          </label>
+          <label>
+            Password
+            <input id="loginPassword" type="password" autocomplete="current-password" value="admin" required>
+          </label>
+          <button type="submit" class="primary">Sign in</button>
+          <p id="loginError" class="error" role="alert"></p>
+        </form>
+      </section>
+    </main>
+
+    <main id="appView" class="app hidden">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="mark">Q</span>
+          <div>
+            <strong>QueueDos</strong>
+            <small id="orgName">Organization</small>
+          </div>
+        </div>
+        <label class="project-switcher">
+          Project
+          <select id="projectSelect"></select>
+        </label>
+        <nav class="tabs" aria-label="Primary">
+          <button class="tab active" data-tab="board">Board</button>
+          <button class="tab" data-tab="list">List</button>
+          <button class="tab admin-only" data-tab="admin">Admin</button>
+        </nav>
+        <div class="sidebar-footer">
+          <span id="currentUser"></span>
+          <button id="logoutBtn" class="ghost">Sign out</button>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <header class="toolbar">
+          <div>
+            <p class="eyebrow" id="projectKey">QDOS</p>
+            <h2 id="projectName">Project</h2>
+          </div>
+          <button id="newTicketBtn" class="primary">New ticket</button>
+        </header>
+
+        <section id="boardTab" class="tab-panel">
+          <div id="board" class="board" aria-live="polite"></div>
+        </section>
+
+        <section id="listTab" class="tab-panel hidden">
+          <div class="filters">
+            <input id="searchInput" type="search" placeholder="Search key, title, description">
+            <select id="statusFilter"></select>
+            <select id="typeFilter"></select>
+            <select id="priorityFilter"></select>
+            <select id="assigneeFilter"></select>
+            <select id="sortSelect">
+              <option value="number">Ticket number</option>
+              <option value="title">Title</option>
+              <option value="priority">Priority</option>
+              <option value="status">Status</option>
+              <option value="updated">Updated</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>Title</th>
+                  <th>Type</th>
+                  <th>Priority</th>
+                  <th>Status</th>
+                  <th>Assignee</th>
+                </tr>
+              </thead>
+              <tbody id="ticketRows"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="adminTab" class="tab-panel hidden">
+          <div class="admin-grid">
+            <section class="panel">
+              <h3>Projects</h3>
+              <form id="projectForm" class="inline-form">
+                <input id="projectKeyInput" placeholder="KEY" maxlength="10">
+                <input id="projectNameInput" placeholder="Project name">
+                <button type="submit">Add</button>
+              </form>
+              <div id="projectList" class="admin-list"></div>
+            </section>
+
+            <section class="panel">
+              <h3>Users</h3>
+              <form id="userForm" class="stack">
+                <input id="userEmailInput" type="email" placeholder="email@example.com">
+                <input id="userNameInput" placeholder="Display name">
+                <div class="split">
+                  <select id="userRoleInput">
+                    <option value="MEMBER">Member</option>
+                    <option value="ADMIN">Admin</option>
+                  </select>
+                  <input id="userPasswordInput" type="password" placeholder="Password">
+                </div>
+                <button type="submit">Add user</button>
+              </form>
+              <div id="userList" class="admin-list"></div>
+            </section>
+
+            <section class="panel">
+              <h3>Ticket types</h3>
+              <form id="typeForm" class="inline-form">
+                <input id="typeNameInput" placeholder="Type name">
+                <input id="typeColorInput" type="color" value="#2563eb" aria-label="Type color">
+                <button type="submit">Add</button>
+              </form>
+              <div id="typeList" class="admin-list"></div>
+            </section>
+
+            <section class="panel wide">
+              <h3>Workflow</h3>
+              <div class="workflow-editor">
+                <div>
+                  <div class="section-heading">
+                    <span>Statuses</span>
+                    <button id="addStatusBtn" type="button">Add status</button>
+                  </div>
+                  <div id="statusEditor" class="editor-list"></div>
+                </div>
+                <div>
+                  <div class="section-heading">
+                    <span>Transitions</span>
+                    <button id="addTransitionBtn" type="button">Add transition</button>
+                  </div>
+                  <div id="transitionEditor" class="editor-list"></div>
+                </div>
+              </div>
+              <div class="actions">
+                <button id="saveWorkflowBtn" class="primary" type="button">Save workflow</button>
+              </div>
+            </section>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <dialog id="ticketDialog">
+      <form id="ticketForm" method="dialog" class="dialog-body">
+        <header>
+          <h3 id="ticketDialogTitle">Ticket</h3>
+          <button id="closeTicketDialog" type="button" class="icon-button" aria-label="Close">x</button>
+        </header>
+        <input id="ticketIdInput" type="hidden">
+        <label>
+          Title
+          <input id="ticketTitleInput" required>
+        </label>
+        <label>
+          Description
+          <textarea id="ticketDescriptionInput" rows="5"></textarea>
+        </label>
+        <div class="form-grid">
+          <label>
+            Type
+            <select id="ticketTypeInput"></select>
+          </label>
+          <label>
+            Priority
+            <select id="ticketPriorityInput"></select>
+          </label>
+          <label>
+            Assignee
+            <select id="ticketAssigneeInput"></select>
+          </label>
+          <label>
+            Status
+            <select id="ticketStatusInput"></select>
+          </label>
+        </div>
+        <p id="ticketFormError" class="error"></p>
+        <footer>
+          <button id="deleteTicketBtn" type="button" class="danger">Delete</button>
+          <span></span>
+          <button type="button" id="cancelTicketBtn">Cancel</button>
+          <button type="submit" class="primary">Save</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast hidden" role="status"></div>
+    <script src="/app.js"></script>
+  </body>
+</html>
