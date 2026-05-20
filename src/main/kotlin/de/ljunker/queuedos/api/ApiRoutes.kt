@@ -11,7 +11,7 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
-import io.ktor.server.response.respondText
+import io.ktor.server.response.respondBytes
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -22,13 +22,7 @@ import kotlinx.serialization.Serializable
 internal fun Application.configureRoutes(store: DataStore) {
     routing {
         get("/") {
-            call.respondStaticResource("static/index.html", ContentType.Text.Html)
-        }
-        get("/style.css") {
-            call.respondStaticResource("static/style.css", ContentType.Text.CSS)
-        }
-        get("/app.js") {
-            call.respondStaticResource("static/app.js", ContentType.Application.JavaScript)
+            call.respondFrontendAsset("index.html")
         }
 
         get("/api/health") {
@@ -118,6 +112,11 @@ internal fun Application.configureRoutes(store: DataStore) {
         put("/api/projects/{id}/workflow") {
             call.respond(store.saveWorkflow(call.requireUser(store), call.pathId(), call.receive()))
         }
+
+        get("/{assetPath...}") {
+            val assetPath = call.parameters.getAll("assetPath")?.joinToString("/") ?: "index.html"
+            call.respondFrontendAsset(assetPath)
+        }
     }
 }
 
@@ -141,11 +140,37 @@ private fun parsePriority(value: String): Priority =
         throw ApiException(HttpStatusCode.BadRequest, "Unknown priority.")
     }
 
-private suspend fun ApplicationCall.respondStaticResource(path: String, contentType: ContentType) {
-    val text = Thread.currentThread().contextClassLoader.getResource(path)?.readText()
+private suspend fun ApplicationCall.respondFrontendAsset(path: String) {
+    val normalized = path.trim('/').ifBlank { "index.html" }
+    if (normalized == "api" || normalized.startsWith("api/") || normalized.contains("..")) {
+        throw ApiException(HttpStatusCode.NotFound, "Resource not found.")
+    }
+
+    val assetPath = "static/$normalized"
+    val resourcePath = when {
+        Thread.currentThread().contextClassLoader.getResource(assetPath) != null -> assetPath
+        "." !in normalized.substringAfterLast('/') -> "static/index.html"
+        else -> throw ApiException(HttpStatusCode.NotFound, "Resource not found.")
+    }
+    val bytes = Thread.currentThread().contextClassLoader.getResource(resourcePath)?.readBytes()
         ?: throw ApiException(HttpStatusCode.NotFound, "Resource not found.")
-    respondText(text, contentType)
+
+    respondBytes(bytes, contentTypeFor(resourcePath))
 }
+
+private fun contentTypeFor(path: String): ContentType =
+    when (path.substringAfterLast('.', "").lowercase()) {
+        "html" -> ContentType.Text.Html
+        "css" -> ContentType.Text.CSS
+        "js", "mjs" -> ContentType.Application.JavaScript
+        "json", "map" -> ContentType.Application.Json
+        "svg" -> ContentType.parse("image/svg+xml")
+        "png" -> ContentType.parse("image/png")
+        "jpg", "jpeg" -> ContentType.parse("image/jpeg")
+        "ico" -> ContentType.parse("image/x-icon")
+        "txt" -> ContentType.Text.Plain
+        else -> ContentType.Application.OctetStream
+    }
 
 @Serializable
 private data class HealthResponse(

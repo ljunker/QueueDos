@@ -132,6 +132,46 @@ export interface CreateTicketCommentRequest {
   body: string;
 }
 
+export interface CreateProjectRequest {
+  key: string;
+  name: string;
+  description?: string;
+}
+
+export interface UpdateProjectRequest {
+  key?: string;
+  name?: string;
+  description?: string;
+  archived?: boolean;
+}
+
+export interface CreateUserRequest {
+  email: string;
+  displayName: string;
+  role: Role;
+  password: string;
+}
+
+export interface UpdateUserRequest {
+  displayName?: string;
+  role?: Role;
+  active?: boolean;
+  password?: string;
+}
+
+export interface CreateTicketTypeRequest {
+  projectId: string;
+  name: string;
+  description?: string;
+  color?: string;
+}
+
+export interface UpdateTicketTypeRequest {
+  name?: string;
+  description?: string;
+  color?: string;
+}
+
 export interface CreateTicketRequest {
   projectId: string;
   title: string;
@@ -160,4 +200,9 @@ export interface UpdateTicketRequest {
 
 export interface TransitionTicketRequest {
   toStatusId: string;
+}
+
+export interface SaveWorkflowRequest {
+  statuses: WorkflowStatus[];
+  transitions: WorkflowTransition[];
 }

@@ -1,6 +1,8 @@
 # QueueDos Angular frontend
 
-This subproject is the migration target for the current static Ktor frontend in `src/main/resources/static`.
+This subproject contains the QueueDos Angular frontend.
+
+The app uses standalone components, zoneless change detection, Atomic Design folders under `shared/atoms`, `shared/molecules`, and `shared/organisms`, and NgRx Store/Effects for server state, UI state, URL state, mutations, and authentication.
 
 ## Development
 

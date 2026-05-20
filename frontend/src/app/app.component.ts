@@ -1,34 +1,24 @@
-import { Component, inject } from '@angular/core';
-import { Router, RouterLink, RouterOutlet } from '@angular/router';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+import { Store } from '@ngrx/store';
 
 import { AuthTokenService } from './core/auth-token.service';
+import { QueueActions } from './state/queue.actions';
 
 @Component({
   selector: 'qd-root',
   standalone: true,
-  imports: [RouterLink, RouterOutlet],
+  imports: [RouterOutlet],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <header class="app-header">
-      <a routerLink="/" class="brand" aria-label="QueueDos home">
-        <span class="mark">Q</span>
-        <span>QueueDos</span>
-      </a>
-      @if (auth.hasToken()) {
-        <button type="button" class="ghost" (click)="logout()">Sign out</button>
-      }
-    </header>
-
-    <main class="app-main">
-      <router-outlet />
-    </main>
+    <router-outlet />
   `
 })
 export class AppComponent {
-  protected readonly auth = inject(AuthTokenService);
-  private readonly router = inject(Router);
+  private readonly auth = inject(AuthTokenService);
+  private readonly store = inject(Store);
 
-  protected logout(): void {
-    this.auth.clear();
-    void this.router.navigateByUrl('/login');
+  constructor() {
+    this.store.dispatch(QueueActions.appStarted({ token: this.auth.token() }));
   }
 }

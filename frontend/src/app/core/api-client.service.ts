@@ -5,12 +5,19 @@ import {
   BootstrapResponse,
   CreateTicketCommentRequest,
   CreateTicketRequest,
+  CreateProjectRequest,
+  CreateTicketTypeRequest,
+  CreateUserRequest,
   LoginRequest,
   LoginResponse,
+  Project,
+  SaveWorkflowRequest,
   Ticket,
   TicketComment,
+  TicketType,
   TicketDetailResponse,
   TransitionTicketRequest,
+  UpdateUserRequest,
   UpdateTicketRequest
 } from './api.models';
 
@@ -44,5 +51,33 @@ export class ApiClientService {
 
   addComment(id: string, request: CreateTicketCommentRequest) {
     return this.http.post<TicketComment>(`/api/tickets/${id}/comments`, request);
+  }
+
+  deleteTicket(id: string) {
+    return this.http.delete<void>(`/api/tickets/${id}`);
+  }
+
+  createProject(request: CreateProjectRequest) {
+    return this.http.post<Project>('/api/projects', request);
+  }
+
+  createUser(request: CreateUserRequest) {
+    return this.http.post('/api/users', request);
+  }
+
+  updateUser(id: string, request: UpdateUserRequest) {
+    return this.http.put(`/api/users/${id}`, request);
+  }
+
+  createTicketType(request: CreateTicketTypeRequest) {
+    return this.http.post<TicketType>('/api/ticket-types', request);
+  }
+
+  deleteTicketType(id: string) {
+    return this.http.delete<void>(`/api/ticket-types/${id}`);
+  }
+
+  saveWorkflow(projectId: string, request: SaveWorkflowRequest) {
+    return this.http.put(`/api/projects/${projectId}/workflow`, request);
   }
 }

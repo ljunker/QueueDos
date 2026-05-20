@@ -1,6 +1,6 @@
 # QueueDos
 
-QueueDos ist ein Kotlin-MVP für ein Jira-ähnliches Ticketsystem. Die Anwendung läuft mit Ktor-REST-API, statischer Weboberfläche und PostgreSQL-Persistenz.
+QueueDos ist ein Kotlin-MVP für ein Jira-ähnliches Ticketsystem. Die Anwendung läuft mit Ktor-REST-API, Angular-Frontend und PostgreSQL-Persistenz.
 
 ## Start
 
@@ -48,7 +48,7 @@ curl http://localhost:8080/api/health
 
 ## Angular-Frontend
 
-Das aktuelle Frontend wird weiterhin aus `src/main/resources/static` ausgeliefert. Für die spätere Migration liegt ein eigenes Angular-Subprojekt in `frontend/`.
+Das Frontend liegt als Angular-Subprojekt in `frontend/`. Es nutzt standalone Components, eine Atomic-Design-Struktur unter `shared/atoms`, `shared/molecules` und `shared/organisms` sowie NgRx Store/Effects für Authentifizierung, Bootstrap-Daten, URL-Zustand, Tickets, Admin-Aktionen und Workflow-Entwürfe.
 
 ```bash
 cd frontend
@@ -56,4 +56,6 @@ npm install
 npm start
 ```
 
-`npm start` startet den Angular-Dev-Server und proxyt `/api` an die Ktor-API auf `http://localhost:8080`. Das Subprojekt ist auf Angular 21 ausgelegt; dafür sollte Node.js 20, 22 oder 24 verwendet werden.
+`npm start` startet den Angular-Dev-Server und proxyt `/api` an die Ktor-API auf `http://localhost:8080`. Das Subprojekt ist auf Angular 21 ausgelegt; dafür sollte Node.js 20.19+, 22.12+ oder 24 verwendet werden.
+
+Der Docker-Build baut das Angular-Frontend in einer eigenen Node-Stage und kopiert das Ergebnis in die Ktor-Ressourcen, damit `http://localhost:8080` die Angular-App ausliefert.
