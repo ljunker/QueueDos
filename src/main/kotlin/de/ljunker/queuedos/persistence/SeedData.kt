@@ -11,12 +11,11 @@ import de.ljunker.queuedos.domain.User
 import de.ljunker.queuedos.domain.Workflow
 import de.ljunker.queuedos.domain.WorkflowStatus
 import de.ljunker.queuedos.domain.WorkflowTransition
+import de.ljunker.queuedos.security.BCRYPT_PASSWORD_MARKER
 import de.ljunker.queuedos.security.hashPassword
 
 internal fun seedData(now: () -> String): AppData {
     val organization = Organization("org-default", "Default Organization")
-    val adminSalt = "seed-admin"
-    val memberSalt = "seed-member"
     val admin = User(
         id = "user-admin",
         organizationId = organization.id,
@@ -24,8 +23,8 @@ internal fun seedData(now: () -> String): AppData {
         displayName = "QueueDos Admin",
         role = Role.ADMIN,
         active = true,
-        passwordSalt = adminSalt,
-        passwordHash = hashPassword("admin", adminSalt)
+        passwordSalt = BCRYPT_PASSWORD_MARKER,
+        passwordHash = hashPassword("admin")
     )
     val member = User(
         id = "user-member",
@@ -34,8 +33,8 @@ internal fun seedData(now: () -> String): AppData {
         displayName = "QueueDos Member",
         role = Role.MEMBER,
         active = true,
-        passwordSalt = memberSalt,
-        passwordHash = hashPassword("member", memberSalt)
+        passwordSalt = BCRYPT_PASSWORD_MARKER,
+        passwordHash = hashPassword("member")
     )
     val project = Project(
         id = "project-queuedos",

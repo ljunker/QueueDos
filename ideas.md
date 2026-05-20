@@ -2,11 +2,11 @@
 
 ## Kurzfristig
 
-- Persistenz auf PostgreSQL vorbereiten, weil die aktuelle Dateiablage für Docker-MVP reicht, aber nicht für mehrere Container.
-- Passwort-Hashing auf BCrypt oder Argon2 umstellen. SHA-256 mit Salt ist für ein MVP verständlich, aber nicht stark genug für echte Nutzerkonten.
-- Sessions stateless machen, z. B. mit signierten JWTs oder zentralem Session-Store. In-Memory-Sessions verhindern Autoscaling.
-- API-Tests für Tickets, Projekte, Tickettypen, Workflows und Rechte erweitern.
-- UI-Tests für Login, Ticketanlage, Drag-and-Drop und Admin-Workflow ergänzen.
+- [x] Persistenz auf PostgreSQL vorbereiten, weil die aktuelle Dateiablage für Docker-MVP reicht, aber nicht für mehrere Container.
+- [x] Passwort-Hashing auf BCrypt oder Argon2 umstellen. SHA-256 mit Salt ist für ein MVP verständlich, aber nicht stark genug für echte Nutzerkonten.
+- [x] Sessions stateless machen, z. B. mit signierten JWTs oder zentralem Session-Store. In-Memory-Sessions verhindern Autoscaling.
+- [x] API-Tests für Tickets, Projekte, Tickettypen, Workflows und Rechte erweitern.
+- [x] UI-Tests für Login, Ticketanlage, Drag-and-Drop und Admin-Workflow ergänzen.
 
 ## Fachliche MVP-Erweiterungen
 

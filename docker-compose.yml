@@ -6,6 +6,7 @@ services:
     environment:
       PORT: "8080"
       QUEUEDOS_DATA_FILE: /data/queuedos.json
+      QUEUEDOS_SESSION_SECRET: queuedos-local-dev-session-secret-change-me
     volumes:
       - queuedos-data:/data
 

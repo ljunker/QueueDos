@@ -25,7 +25,11 @@ import de.ljunker.queuedos.domain.User
 import de.ljunker.queuedos.domain.Workflow
 import de.ljunker.queuedos.domain.WorkflowStatus
 import de.ljunker.queuedos.domain.publicView
+import de.ljunker.queuedos.security.AuthTokenCodec
+import de.ljunker.queuedos.security.BCRYPT_PASSWORD_MARKER
 import de.ljunker.queuedos.security.hashPassword
+import de.ljunker.queuedos.security.passwordNeedsRehash
+import de.ljunker.queuedos.security.verifyPassword
 import de.ljunker.queuedos.validation.normalizeColor
 import de.ljunker.queuedos.validation.normalizeEmail
 import de.ljunker.queuedos.validation.normalizeProjectKey
@@ -35,25 +39,23 @@ import de.ljunker.queuedos.validation.requireName
 import de.ljunker.queuedos.validation.requirePassword
 import de.ljunker.queuedos.validation.validateRequiredFields
 import io.ktor.http.HttpStatusCode
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardOpenOption
-import java.security.SecureRandom
 import java.time.Instant
-import java.util.Base64
 import java.util.Locale
 import java.util.UUID
 
 class DataStore(
-    private val dataFile: Path,
-    private val json: Json
+    private val storage: AppDataStorage,
+    private val tokenCodec: AuthTokenCodec
 ) {
+    constructor(
+        dataFile: Path,
+        json: Json,
+        tokenCodec: AuthTokenCodec = AuthTokenCodec("queuedos-development-session-secret-change-me")
+    ) : this(FileAppDataStorage(dataFile, json), tokenCodec)
+
     private val lock = Any()
-    private val random = SecureRandom()
-    private val sessions = mutableMapOf<String, String>()
     private var data: AppData = loadOrSeed()
 
     fun login(request: LoginRequest): LoginResponse = synchronized(lock) {
@@ -61,17 +63,27 @@ class DataStore(
         val user = data.users.firstOrNull { it.email.lowercase(Locale.ROOT) == email && it.active }
             ?: throw ApiException(HttpStatusCode.Unauthorized, "Invalid email or password.")
 
-        if (hashPassword(request.password, user.passwordSalt) != user.passwordHash) {
+        if (!verifyPassword(request.password, user.passwordSalt, user.passwordHash)) {
             throw ApiException(HttpStatusCode.Unauthorized, "Invalid email or password.")
         }
 
-        val token = randomToken()
-        sessions[token] = user.id
-        LoginResponse(token, user.publicView())
+        val authenticatedUser = if (passwordNeedsRehash(user.passwordHash)) {
+            val upgraded = user.copy(
+                passwordSalt = BCRYPT_PASSWORD_MARKER,
+                passwordHash = hashPassword(request.password)
+            )
+            data = data.copy(users = data.users.map { if (it.id == user.id) upgraded else it })
+            saveLocked()
+            upgraded
+        } else {
+            user
+        }
+
+        LoginResponse(tokenCodec.createToken(authenticatedUser.id), authenticatedUser.publicView())
     }
 
     fun userByToken(token: String): User? = synchronized(lock) {
-        val userId = sessions[token]
+        val userId = tokenCodec.userIdFromToken(token) ?: return@synchronized null
         data.users.firstOrNull { it.id == userId && it.active }
     }
 
@@ -138,7 +150,6 @@ class DataStore(
         if (data.users.any { it.organizationId == actor.organizationId && it.email.lowercase(Locale.ROOT) == email }) {
             throw ApiException(HttpStatusCode.Conflict, "A user with this email already exists.")
         }
-        val salt = randomSalt()
         val user = User(
             id = id("user"),
             organizationId = actor.organizationId,
@@ -146,8 +157,8 @@ class DataStore(
             displayName = requireName(request.displayName, "Display name"),
             role = request.role,
             active = true,
-            passwordSalt = salt,
-            passwordHash = hashPassword(requirePassword(request.password), salt)
+            passwordSalt = BCRYPT_PASSWORD_MARKER,
+            passwordHash = hashPassword(requirePassword(request.password))
         )
         data = data.copy(users = data.users + user)
         saveLocked()
@@ -162,8 +173,7 @@ class DataStore(
             throw ApiException(HttpStatusCode.Conflict, "You cannot deactivate your own account.")
         }
         val passwordUpdate = request.password?.takeIf { it.isNotBlank() }?.let {
-            val salt = randomSalt()
-            salt to hashPassword(requirePassword(it), salt)
+            BCRYPT_PASSWORD_MARKER to hashPassword(requirePassword(it))
         }
         val updated = current.copy(
             displayName = request.displayName?.let { requireName(it, "Display name") } ?: current.displayName,
@@ -385,27 +395,14 @@ class DataStore(
     }
 
     private fun loadOrSeed(): AppData {
-        if (Files.exists(dataFile)) {
-            return json.decodeFromString(Files.readString(dataFile))
-        }
+        storage.load()?.let { return it }
         val seeded = seedData(::now)
-        writeData(seeded)
+        storage.save(seeded)
         return seeded
     }
 
     private fun saveLocked() {
-        writeData(data)
-    }
-
-    private fun writeData(snapshot: AppData) {
-        dataFile.parent?.let { Files.createDirectories(it) }
-        Files.writeString(
-            dataFile,
-            json.encodeToString(snapshot),
-            StandardOpenOption.CREATE,
-            StandardOpenOption.TRUNCATE_EXISTING,
-            StandardOpenOption.WRITE
-        )
+        storage.save(data)
     }
 
     private fun requireAdmin(user: User) {
@@ -459,14 +456,6 @@ class DataStore(
 
     private fun projectKey(projectId: String): String =
         data.projects.firstOrNull { it.id == projectId }?.key ?: ""
-
-    private fun randomToken(): String {
-        val bytes = ByteArray(32)
-        random.nextBytes(bytes)
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
-    }
-
-    private fun randomSalt(): String = UUID.randomUUID().toString()
 
     private fun id(prefix: String): String = "$prefix-${UUID.randomUUID()}"
 

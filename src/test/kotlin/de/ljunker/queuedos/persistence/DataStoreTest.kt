@@ -6,13 +6,20 @@ import de.ljunker.queuedos.api.CreateTicketRequest
 import de.ljunker.queuedos.api.LoginRequest
 import de.ljunker.queuedos.api.SaveWorkflowRequest
 import de.ljunker.queuedos.api.TransitionTicketRequest
+import de.ljunker.queuedos.domain.AppData
 import de.ljunker.queuedos.domain.Role
+import de.ljunker.queuedos.security.AuthTokenCodec
+import de.ljunker.queuedos.security.BCRYPT_PASSWORD_MARKER
+import de.ljunker.queuedos.security.legacySha256Hash
 import io.ktor.http.HttpStatusCode
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import java.nio.file.Files
+import kotlin.test.assertTrue
 
 class DataStoreTest {
     private val json = Json {
@@ -28,6 +35,42 @@ class DataStoreTest {
         val response = store.login(LoginRequest("admin@queuedos.local", "admin"))
 
         assertEquals(Role.ADMIN, response.user.role)
+    }
+
+    @Test
+    fun tokensAreStatelessAcrossStoreInstances() {
+        val dir = Files.createTempDirectory("queuedos-test")
+        val dataFile = dir.resolve("state.json")
+        val tokenCodec = AuthTokenCodec("test-session-secret-that-is-long-enough")
+        val firstStore = DataStore(dataFile, json, tokenCodec)
+
+        val token = firstStore.login(LoginRequest("admin@queuedos.local", "admin")).token
+        val secondStore = DataStore(dataFile, json, tokenCodec)
+
+        assertEquals("user-admin", secondStore.userByToken(token)?.id)
+    }
+
+    @Test
+    fun legacyPasswordHashesAreMigratedToBcryptOnLogin() {
+        val dir = Files.createTempDirectory("queuedos-test")
+        val dataFile = dir.resolve("state.json")
+        val store = DataStore(dataFile, json)
+        val original = json.decodeFromString<AppData>(Files.readString(dataFile))
+        val legacyAdmin = original.users.first { it.id == "user-admin" }.copy(
+            passwordSalt = "legacy-admin",
+            passwordHash = legacySha256Hash("admin", "legacy-admin")
+        )
+        Files.writeString(
+            dataFile,
+            json.encodeToString(original.copy(users = original.users.map { if (it.id == legacyAdmin.id) legacyAdmin else it }))
+        )
+        val migratedStore = DataStore(dataFile, json)
+
+        migratedStore.login(LoginRequest("admin@queuedos.local", "admin"))
+
+        val migrated = json.decodeFromString<AppData>(Files.readString(dataFile)).users.first { it.id == "user-admin" }
+        assertEquals(BCRYPT_PASSWORD_MARKER, migrated.passwordSalt)
+        assertTrue(migrated.passwordHash.startsWith("\$2"))
     }
 
     @Test
