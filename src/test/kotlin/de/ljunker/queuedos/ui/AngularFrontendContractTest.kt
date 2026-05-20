@@ -3,6 +3,7 @@ package de.ljunker.queuedos.ui
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertContains
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AngularFrontendContractTest {
@@ -41,15 +42,22 @@ class AngularFrontendContractTest {
         val ticketCard = projectFile("frontend/src/app/shared/molecules/ticket-card.component.ts")
         val detail = projectFile("frontend/src/app/shared/organisms/ticket-detail-view.component.ts")
         val comments = projectFile("frontend/src/app/shared/organisms/ticket-comments-panel.component.ts")
+        val effects = projectFile("frontend/src/app/state/queue.effects.ts")
+        val transitionEffect =
+            effects.substringAfter("readonly transitionTicket$").substringBefore("readonly deleteTicket$")
 
         assertContains(workspace, "QueueActions.ticketDialogOpened")
         assertContains(workspace, "QueueActions.workflowSaveRequested")
         assertContains(workflowPanel, "qd-workflow-status-editor")
         assertContains(workflowPanel, "qd-workflow-transition-editor")
         assertContains(ticketCard, "dragstart")
+        assertContains(ticketCard, "handleClick")
+        assertContains(ticketCard, "lastDragEndedAt")
         assertContains(board, "ticketTransitioned")
         assertContains(detail, "commentSubmitted")
         assertContains(comments, "commentSubmitted")
+        assertContains(transitionEffect, "QueueActions.mutationSucceeded({})")
+        assertFalse("focusTicketId" in transitionEffect)
     }
 
     @Test

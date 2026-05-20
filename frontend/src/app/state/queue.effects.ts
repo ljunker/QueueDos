@@ -1,14 +1,14 @@
-import { HttpErrorResponse } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
-import { Router } from '@angular/router';
-import { Actions, createEffect, ofType } from '@ngrx/effects';
-import { Store } from '@ngrx/store';
-import { catchError, concatMap, debounceTime, filter, map, of, switchMap, tap, withLatestFrom } from 'rxjs';
+import {HttpErrorResponse} from '@angular/common/http';
+import {inject, Injectable} from '@angular/core';
+import {Router} from '@angular/router';
+import {Actions, createEffect, ofType} from '@ngrx/effects';
+import {Store} from '@ngrx/store';
+import {catchError, concatMap, debounceTime, filter, map, of, switchMap, tap, withLatestFrom} from 'rxjs';
 
-import { ApiClientService } from '../core/api-client.service';
-import { AuthTokenService } from '../core/auth-token.service';
-import { QueueActions } from './queue.actions';
-import { selectUrlQueryParams } from './queue.selectors';
+import {ApiClientService} from '../core/api-client.service';
+import {AuthTokenService} from '../core/auth-token.service';
+import {QueueActions} from './queue.actions';
+import {selectUrlQueryParams} from './queue.selectors';
 
 @Injectable()
 export class QueueEffects {
@@ -124,7 +124,7 @@ export class QueueEffects {
       ofType(QueueActions.ticketTransitionRequested),
       concatMap(({ ticket, toStatusId }) =>
         this.api.transitionTicket(ticket.id, { toStatusId }).pipe(
-          map(() => QueueActions.mutationSucceeded({ focusTicketId: ticket.id })),
+            map(() => QueueActions.mutationSucceeded({})),
           catchError((error: unknown) => of(QueueActions.mutationFailed({ error: errorMessage(error, 'Transition failed.') })))
         )
       )
