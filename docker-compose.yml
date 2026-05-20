@@ -5,10 +5,27 @@ services:
       - "8080:8080"
     environment:
       PORT: "8080"
-      QUEUEDOS_DATA_FILE: /data/queuedos.json
+      QUEUEDOS_DATABASE_URL: jdbc:postgresql://db:5432/queuedos
+      QUEUEDOS_DATABASE_USER: queuedos
+      QUEUEDOS_DATABASE_PASSWORD: queuedos
       QUEUEDOS_SESSION_SECRET: queuedos-local-dev-session-secret-change-me
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: queuedos
+      POSTGRES_USER: queuedos
+      POSTGRES_PASSWORD: queuedos
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U queuedos -d queuedos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     volumes:
-      - queuedos-data:/data
+      - queuedos-postgres:/var/lib/postgresql/data
 
 volumes:
-  queuedos-data:
+  queuedos-postgres:

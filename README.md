@@ -1,6 +1,6 @@
 # QueueDos
 
-QueueDos ist ein Kotlin-MVP für ein Jira-ähnliches Ticketsystem. Die Anwendung läuft als ein Docker-Container mit Ktor-REST-API, statischer Weboberfläche und dateibasierter Persistenz für das MVP.
+QueueDos ist ein Kotlin-MVP für ein Jira-ähnliches Ticketsystem. Die Anwendung läuft mit Ktor-REST-API, statischer Weboberfläche und PostgreSQL-Persistenz.
 
 ## Start
 
@@ -27,16 +27,17 @@ Vordefinierte Nutzer:
 - Ticketliste mit Suche, Filtern und Sortierung.
 - Admin-Oberflächen für Nutzer, Projekte, Tickettypen und Workflows.
 
-Die Anwendung speichert standardmäßig in `QUEUEDOS_DATA_FILE`; das Docker-Compose-Setup bindet diesen Pfad als Volume ein. Alternativ kann ein PostgreSQL-Snapshot-Store über `QUEUEDOS_DATABASE_URL` aktiviert werden. Für mehrere API-Container muss außerdem `QUEUEDOS_SESSION_SECRET` auf denselben starken Wert gesetzt werden, weil Anmeldungen als signierte stateless Tokens ausgegeben werden. Der PostgreSQL-Store ersetzt die lokale Dateiablage, bleibt aber bewusst ein Snapshot-Store und noch kein fein granuliertes relationales Repository.
+Das Docker-Compose-Setup startet PostgreSQL und speichert QueueDos-Daten in relationalen Tabellen für Organisationen, Nutzer, Projekte, Tickettypen, Workflows, Workflow-Status, Workflow-Übergänge und Tickets. Für mehrere API-Container muss `QUEUEDOS_SESSION_SECRET` auf denselben starken Wert gesetzt werden, weil Anmeldungen als signierte stateless Tokens ausgegeben werden.
 
 Wichtige Umgebungsvariablen:
 
-- `QUEUEDOS_DATA_FILE`: Pfad zur JSON-Datei, Standard `data/queuedos.json`.
 - `QUEUEDOS_DATABASE_URL`: JDBC-URL für PostgreSQL, z. B. `jdbc:postgresql://db:5432/queuedos`.
-- `QUEUEDOS_DATABASE_USER` / `QUEUEDOS_DATABASE_PASSWORD`: optionale PostgreSQL-Zugangsdaten.
-- `QUEUEDOS_DATABASE_STATE_ID`: optionale Zeilen-ID für den PostgreSQL-Snapshot, Standard `default`.
+- `QUEUEDOS_DATABASE_USER` / `QUEUEDOS_DATABASE_PASSWORD`: PostgreSQL-Zugangsdaten.
+- `QUEUEDOS_DATA_FILE`: optionaler JSON-Dateipfad, nur wenn `QUEUEDOS_DATABASE_URL` nicht gesetzt ist.
 - `QUEUEDOS_SESSION_SECRET`: gemeinsamer HMAC-Schlüssel für stateless Session-Tokens.
 - `QUEUEDOS_SESSION_TTL_HOURS`: Token-Laufzeit in Stunden, Standard `12`.
+
+Ohne `QUEUEDOS_DATABASE_URL` fällt die Anwendung für lokale Experimente weiterhin auf `QUEUEDOS_DATA_FILE` zurück. Bestehende Daten aus dem früheren PostgreSQL-Snapshot `queuedos_state` werden beim ersten Start in die relationalen Tabellen migriert.
 
 ## Zustandsprüfung
 

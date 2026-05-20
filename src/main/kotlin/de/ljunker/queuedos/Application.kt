@@ -52,7 +52,7 @@ private fun dataStoreFromEnvironment(): DataStore {
             username = System.getenv("QUEUEDOS_DATABASE_USER"),
             password = System.getenv("QUEUEDOS_DATABASE_PASSWORD"),
             json = appJson,
-            rowId = System.getenv("QUEUEDOS_DATABASE_STATE_ID") ?: "default"
+            legacySnapshotId = System.getenv("QUEUEDOS_LEGACY_DATABASE_STATE_ID") ?: "default"
         )
     }
     return DataStore(storage, tokenCodec)
