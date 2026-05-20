@@ -1,13 +1,16 @@
 package de.ljunker.queuedos.persistence
 
 import de.ljunker.queuedos.api.ApiException
+import de.ljunker.queuedos.api.CreateTicketCommentRequest
 import de.ljunker.queuedos.api.CreateProjectRequest
 import de.ljunker.queuedos.api.CreateTicketRequest
 import de.ljunker.queuedos.api.LoginRequest
 import de.ljunker.queuedos.api.SaveWorkflowRequest
 import de.ljunker.queuedos.api.TransitionTicketRequest
+import de.ljunker.queuedos.api.UpdateTicketRequest
 import de.ljunker.queuedos.domain.AppData
 import de.ljunker.queuedos.domain.Role
+import de.ljunker.queuedos.domain.WorkflowTransition
 import de.ljunker.queuedos.security.AuthTokenCodec
 import de.ljunker.queuedos.security.BCRYPT_PASSWORD_MARKER
 import de.ljunker.queuedos.security.legacySha256Hash
@@ -125,6 +128,88 @@ class DataStoreTest {
         )
 
         assertEquals("QDOS-4", ticket.key)
+    }
+
+    @Test
+    fun ticketMetadataCommentsAndChangesAreTracked() {
+        val store = newStore()
+        val admin = store.userByToken(store.login(LoginRequest("admin@queuedos.local", "admin")).token)!!
+        val bootstrap = store.bootstrap(admin)
+        val project = bootstrap.projects.first()
+        val type = bootstrap.ticketTypes.first { it.projectId == project.id }
+
+        val ticket = store.createTicket(
+            admin,
+            CreateTicketRequest(
+                projectId = project.id,
+                title = "Customer outage",
+                typeId = type.id,
+                labels = listOf("Customer", "Blocked"),
+                dueDate = "2026-06-01",
+                estimate = 8
+            )
+        )
+        store.updateTicket(
+            admin,
+            ticket.id,
+            UpdateTicketRequest(
+                title = "Customer outage follow-up",
+                labels = listOf("customer"),
+                clearDueDate = true,
+                estimate = 5
+            )
+        )
+        store.addComment(admin, ticket.id, CreateTicketCommentRequest("Waiting on logs."))
+
+        val detail = store.ticketDetail(admin, ticket.id)
+
+        assertEquals(listOf("customer"), detail.ticket.labels)
+        assertEquals(null, detail.ticket.dueDate)
+        assertEquals(5, detail.ticket.estimate)
+        assertEquals("Waiting on logs.", detail.comments.single().body)
+        assertTrue(detail.changes.any { it.field == "title" })
+        assertTrue(detail.changes.any { it.field == "comment" })
+    }
+
+    @Test
+    fun workflowSupportsGlobalTransitionsAndBackwardRules() {
+        val store = newStore()
+        val admin = store.userByToken(store.login(LoginRequest("admin@queuedos.local", "admin")).token)!!
+        val bootstrap = store.bootstrap(admin)
+        val project = bootstrap.projects.first()
+        val workflow = bootstrap.workflows.first { it.projectId == project.id }
+        val todoTicket = bootstrap.tickets.first { it.statusId == "status-todo" }
+
+        store.saveWorkflow(
+            admin,
+            project.id,
+            SaveWorkflowRequest(
+                statuses = workflow.statuses,
+                transitions = listOf(
+                    WorkflowTransition(
+                        id = "transition-global-done",
+                        toStatusId = "status-done",
+                        allowedRoles = listOf(Role.ADMIN),
+                        globalTransition = true
+                    ),
+                    WorkflowTransition(
+                        id = "transition-done-todo",
+                        fromStatusId = "status-done",
+                        toStatusId = "status-todo",
+                        allowedRoles = listOf(Role.ADMIN),
+                        allowBackward = false
+                    )
+                )
+            )
+        )
+
+        val moved = store.transitionTicket(admin, todoTicket.id, TransitionTicketRequest("status-done"))
+        val failure = assertFailsWith<ApiException> {
+            store.transitionTicket(admin, moved.id, TransitionTicketRequest("status-todo"))
+        }
+
+        assertEquals("status-done", moved.statusId)
+        assertEquals(HttpStatusCode.Conflict, failure.status)
     }
 
     private fun newStore(): DataStore {

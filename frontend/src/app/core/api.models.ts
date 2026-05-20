@@ -43,10 +43,12 @@ export interface WorkflowStatus {
 
 export interface WorkflowTransition {
   id: string;
-  fromStatusId: string;
+  fromStatusId: string | null;
   toStatusId: string;
   allowedRoles: Role[];
   requiredFields: string[];
+  globalTransition: boolean;
+  allowBackward: boolean;
 }
 
 export interface Workflow {
@@ -69,9 +71,32 @@ export interface Ticket {
   typeId: string;
   priority: Priority;
   assigneeId: string | null;
+  labels: string[];
+  dueDate: string | null;
+  estimate: number | null;
   reporterId: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface TicketComment {
+  id: string;
+  organizationId: string;
+  ticketId: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface TicketChange {
+  id: string;
+  organizationId: string;
+  ticketId: string;
+  actorId: string;
+  field: string;
+  oldValue: string | null;
+  newValue: string | null;
+  createdAt: string;
 }
 
 export interface LoginRequest {
@@ -92,7 +117,19 @@ export interface BootstrapResponse {
   ticketTypes: TicketType[];
   workflows: Workflow[];
   tickets: Ticket[];
+  comments: TicketComment[];
+  ticketChanges: TicketChange[];
   priorities: Priority[];
+}
+
+export interface TicketDetailResponse {
+  ticket: Ticket;
+  comments: TicketComment[];
+  changes: TicketChange[];
+}
+
+export interface CreateTicketCommentRequest {
+  body: string;
 }
 
 export interface CreateTicketRequest {
@@ -103,6 +140,9 @@ export interface CreateTicketRequest {
   priority: Priority;
   assigneeId: string | null;
   statusId: string | null;
+  labels: string[];
+  dueDate: string | null;
+  estimate: number | null;
 }
 
 export interface UpdateTicketRequest {
@@ -111,6 +151,11 @@ export interface UpdateTicketRequest {
   typeId?: string;
   priority?: Priority;
   assigneeId?: string | null;
+  labels?: string[];
+  dueDate?: string | null;
+  estimate?: number | null;
+  clearDueDate?: boolean;
+  clearEstimate?: boolean;
 }
 
 export interface TransitionTicketRequest {

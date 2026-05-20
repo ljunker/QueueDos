@@ -2,6 +2,7 @@ package de.ljunker.queuedos.persistence
 
 import de.ljunker.queuedos.api.ApiException
 import de.ljunker.queuedos.api.BootstrapResponse
+import de.ljunker.queuedos.api.CreateTicketCommentRequest
 import de.ljunker.queuedos.api.CreateProjectRequest
 import de.ljunker.queuedos.api.CreateTicketRequest
 import de.ljunker.queuedos.api.CreateTicketTypeRequest
@@ -9,6 +10,7 @@ import de.ljunker.queuedos.api.CreateUserRequest
 import de.ljunker.queuedos.api.LoginRequest
 import de.ljunker.queuedos.api.LoginResponse
 import de.ljunker.queuedos.api.SaveWorkflowRequest
+import de.ljunker.queuedos.api.TicketDetailResponse
 import de.ljunker.queuedos.api.TransitionTicketRequest
 import de.ljunker.queuedos.api.UpdateProjectRequest
 import de.ljunker.queuedos.api.UpdateTicketRequest
@@ -20,6 +22,8 @@ import de.ljunker.queuedos.domain.Project
 import de.ljunker.queuedos.domain.PublicUser
 import de.ljunker.queuedos.domain.Role
 import de.ljunker.queuedos.domain.Ticket
+import de.ljunker.queuedos.domain.TicketChange
+import de.ljunker.queuedos.domain.TicketComment
 import de.ljunker.queuedos.domain.TicketType
 import de.ljunker.queuedos.domain.User
 import de.ljunker.queuedos.domain.Workflow
@@ -31,6 +35,9 @@ import de.ljunker.queuedos.security.hashPassword
 import de.ljunker.queuedos.security.passwordNeedsRehash
 import de.ljunker.queuedos.security.verifyPassword
 import de.ljunker.queuedos.validation.normalizeColor
+import de.ljunker.queuedos.validation.normalizeDueDate
+import de.ljunker.queuedos.validation.normalizeEstimate
+import de.ljunker.queuedos.validation.normalizeLabels
 import de.ljunker.queuedos.validation.normalizeEmail
 import de.ljunker.queuedos.validation.normalizeProjectKey
 import de.ljunker.queuedos.validation.normalizeStatuses
@@ -97,6 +104,8 @@ class DataStore(
             ticketTypes = data.ticketTypes.filter { it.organizationId == organizationId },
             workflows = data.workflows.filter { it.organizationId == organizationId },
             tickets = data.tickets.filter { it.organizationId == organizationId },
+            comments = data.comments.filter { it.organizationId == organizationId },
+            ticketChanges = data.ticketChanges.filter { it.organizationId == organizationId },
             priorities = Priority.entries.toList()
         )
     }
@@ -274,6 +283,7 @@ class DataStore(
         typeId: String?,
         priority: Priority?,
         assigneeId: String?,
+        label: String?,
         sort: String?
     ): List<Ticket> = synchronized(lock) {
         var tickets = data.tickets.asSequence().filter { it.organizationId == actor.organizationId }
@@ -283,7 +293,8 @@ class DataStore(
             tickets = tickets.filter {
                 it.key.lowercase(Locale.ROOT).contains(needle) ||
                     it.title.lowercase(Locale.ROOT).contains(needle) ||
-                    it.description.lowercase(Locale.ROOT).contains(needle)
+                    it.description.lowercase(Locale.ROOT).contains(needle) ||
+                    it.labels.any { label -> label.contains(needle) }
             }
         }
         if (!statusId.isNullOrBlank()) tickets = tickets.filter { it.statusId == statusId }
@@ -295,6 +306,10 @@ class DataStore(
             } else {
                 tickets.filter { it.assigneeId == assigneeId }
             }
+        }
+        if (!label.isNullOrBlank()) {
+            val normalizedLabel = label.trim().lowercase(Locale.ROOT)
+            tickets = tickets.filter { normalizedLabel in it.labels }
         }
         val result = tickets.toList()
         when (sort ?: "number") {
@@ -318,6 +333,7 @@ class DataStore(
         requireAssignee(actor, request.assigneeId)
 
         val nextNumber = project.nextTicketNumber
+        val timestamp = now()
         val ticket = Ticket(
             id = id("ticket"),
             organizationId = actor.organizationId,
@@ -330,13 +346,25 @@ class DataStore(
             typeId = type.id,
             priority = request.priority,
             assigneeId = request.assigneeId?.takeIf { it.isNotBlank() },
+            labels = normalizeLabels(request.labels),
+            dueDate = normalizeDueDate(request.dueDate),
+            estimate = normalizeEstimate(request.estimate),
             reporterId = actor.id,
-            createdAt = now(),
-            updatedAt = now()
+            createdAt = timestamp,
+            updatedAt = timestamp
+        )
+        val created = ticketChange(
+            actor = actor,
+            ticket = ticket,
+            field = "ticket",
+            oldValue = null,
+            newValue = "created",
+            createdAt = timestamp
         )
         data = data.copy(
             projects = data.projects.map { if (it.id == project.id) it.copy(nextTicketNumber = nextNumber + 1) else it },
-            tickets = data.tickets + ticket
+            tickets = data.tickets + ticket,
+            ticketChanges = data.ticketChanges + created
         )
         saveLocked()
         ticket
@@ -352,15 +380,26 @@ class DataStore(
         requireTicketTypeForProject(actor, typeId, project.id)
         val assigneeId = request.assigneeId?.takeIf { it.isNotBlank() }
         requireAssignee(actor, assigneeId)
+        val labels = request.labels?.let { normalizeLabels(it) } ?: current.labels
+        val dueDate = if (request.clearDueDate) null else request.dueDate?.let { normalizeDueDate(it) } ?: current.dueDate
+        val estimate = if (request.clearEstimate) null else request.estimate?.let { normalizeEstimate(it) } ?: current.estimate
+        val timestamp = now()
         val updated = current.copy(
             title = request.title?.let { requireName(it, "Ticket title") } ?: current.title,
             description = request.description?.trim() ?: current.description,
             typeId = typeId,
             priority = request.priority ?: current.priority,
             assigneeId = if (request.assigneeId == null) current.assigneeId else assigneeId,
-            updatedAt = now()
+            labels = labels,
+            dueDate = dueDate,
+            estimate = estimate,
+            updatedAt = timestamp
         )
-        data = data.copy(tickets = data.tickets.map { if (it.id == ticketId) updated else it })
+        val changes = ticketChanges(actor, current, updated, timestamp)
+        data = data.copy(
+            tickets = data.tickets.map { if (it.id == ticketId) updated else it },
+            ticketChanges = data.ticketChanges + changes
+        )
         saveLocked()
         updated
     }
@@ -375,22 +414,77 @@ class DataStore(
         val workflow = requireWorkflow(project.id)
         requireStatus(workflow, request.toStatusId)
         val transition = workflow.transitions.firstOrNull {
-            it.fromStatusId == current.statusId && it.toStatusId == request.toStatusId
+            (it.globalTransition || it.fromStatusId == current.statusId) && it.toStatusId == request.toStatusId
         } ?: throw ApiException(HttpStatusCode.Conflict, "This workflow transition is not allowed.")
         if (actor.role !in transition.allowedRoles) {
             throw ApiException(HttpStatusCode.Forbidden, "Your role cannot perform this workflow transition.")
         }
+        if (isBackwardTransition(workflow, current.statusId, request.toStatusId) && !transition.allowBackward) {
+            throw ApiException(HttpStatusCode.Conflict, "This workflow transition cannot move tickets backwards.")
+        }
         validateRequiredFields(current, transition.requiredFields)
-        val updated = current.copy(statusId = request.toStatusId, updatedAt = now())
-        data = data.copy(tickets = data.tickets.map { if (it.id == ticketId) updated else it })
+        val timestamp = now()
+        val updated = current.copy(statusId = request.toStatusId, updatedAt = timestamp)
+        data = data.copy(
+            tickets = data.tickets.map { if (it.id == ticketId) updated else it },
+            ticketChanges = data.ticketChanges + ticketChange(
+                actor = actor,
+                ticket = current,
+                field = "statusId",
+                oldValue = current.statusId,
+                newValue = request.toStatusId,
+                createdAt = timestamp
+            )
+        )
         saveLocked()
         updated
+    }
+
+    fun ticketDetail(actor: User, ticketId: String): TicketDetailResponse = synchronized(lock) {
+        val ticket = requireTicket(actor, ticketId)
+        TicketDetailResponse(
+            ticket = ticket,
+            comments = data.comments.filter { it.ticketId == ticket.id && it.organizationId == actor.organizationId }
+                .sortedBy { it.createdAt },
+            changes = data.ticketChanges.filter { it.ticketId == ticket.id && it.organizationId == actor.organizationId }
+                .sortedByDescending { it.createdAt }
+        )
+    }
+
+    fun addComment(actor: User, ticketId: String, request: CreateTicketCommentRequest): TicketComment = synchronized(lock) {
+        val ticket = requireTicket(actor, ticketId)
+        val timestamp = now()
+        val comment = TicketComment(
+            id = id("comment"),
+            organizationId = actor.organizationId,
+            ticketId = ticket.id,
+            authorId = actor.id,
+            body = requireName(request.body, "Comment"),
+            createdAt = timestamp
+        )
+        data = data.copy(
+            comments = data.comments + comment,
+            ticketChanges = data.ticketChanges + ticketChange(
+                actor = actor,
+                ticket = ticket,
+                field = "comment",
+                oldValue = null,
+                newValue = "added",
+                createdAt = timestamp
+            )
+        )
+        saveLocked()
+        comment
     }
 
     fun deleteTicket(actor: User, ticketId: String) = synchronized(lock) {
         requireAdmin(actor)
         val current = requireTicket(actor, ticketId)
-        data = data.copy(tickets = data.tickets.filterNot { it.id == current.id })
+        data = data.copy(
+            tickets = data.tickets.filterNot { it.id == current.id },
+            comments = data.comments.filterNot { it.ticketId == current.id },
+            ticketChanges = data.ticketChanges.filterNot { it.ticketId == current.id }
+        )
         saveLocked()
     }
 
@@ -454,8 +548,58 @@ class DataStore(
         return workflow?.statuses?.firstOrNull { it.id == ticket.statusId }?.sortOrder ?: Int.MAX_VALUE
     }
 
+    private fun isBackwardTransition(workflow: Workflow, fromStatusId: String, toStatusId: String): Boolean {
+        val fromOrder = workflow.statuses.firstOrNull { it.id == fromStatusId }?.sortOrder ?: return false
+        val toOrder = workflow.statuses.firstOrNull { it.id == toStatusId }?.sortOrder ?: return false
+        return toOrder < fromOrder
+    }
+
     private fun projectKey(projectId: String): String =
         data.projects.firstOrNull { it.id == projectId }?.key ?: ""
+
+    private fun ticketChanges(actor: User, current: Ticket, updated: Ticket, createdAt: String): List<TicketChange> =
+        buildList {
+            addIfChanged(actor, current, "title", current.title, updated.title, createdAt)
+            addIfChanged(actor, current, "description", current.description, updated.description, createdAt)
+            addIfChanged(actor, current, "typeId", current.typeId, updated.typeId, createdAt)
+            addIfChanged(actor, current, "priority", current.priority.name, updated.priority.name, createdAt)
+            addIfChanged(actor, current, "assigneeId", current.assigneeId, updated.assigneeId, createdAt)
+            addIfChanged(actor, current, "labels", current.labels.joinToString(","), updated.labels.joinToString(","), createdAt)
+            addIfChanged(actor, current, "dueDate", current.dueDate, updated.dueDate, createdAt)
+            addIfChanged(actor, current, "estimate", current.estimate?.toString(), updated.estimate?.toString(), createdAt)
+        }
+
+    private fun MutableList<TicketChange>.addIfChanged(
+        actor: User,
+        ticket: Ticket,
+        field: String,
+        oldValue: String?,
+        newValue: String?,
+        createdAt: String
+    ) {
+        if (oldValue != newValue) {
+            add(ticketChange(actor, ticket, field, oldValue, newValue, createdAt))
+        }
+    }
+
+    private fun ticketChange(
+        actor: User,
+        ticket: Ticket,
+        field: String,
+        oldValue: String?,
+        newValue: String?,
+        createdAt: String
+    ): TicketChange =
+        TicketChange(
+            id = id("change"),
+            organizationId = actor.organizationId,
+            ticketId = ticket.id,
+            actorId = actor.id,
+            field = field,
+            oldValue = oldValue,
+            newValue = newValue,
+            createdAt = createdAt
+        )
 
     private fun id(prefix: String): String = "$prefix-${UUID.randomUUID()}"
 

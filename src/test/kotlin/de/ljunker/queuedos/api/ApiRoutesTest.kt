@@ -4,6 +4,7 @@ import de.ljunker.queuedos.module
 import de.ljunker.queuedos.domain.Project
 import de.ljunker.queuedos.domain.Role
 import de.ljunker.queuedos.domain.Ticket
+import de.ljunker.queuedos.domain.TicketComment
 import de.ljunker.queuedos.domain.TicketType
 import de.ljunker.queuedos.domain.Workflow
 import de.ljunker.queuedos.domain.WorkflowTransition
@@ -85,16 +86,33 @@ class ApiRoutesTest {
                     projectId = project.id,
                     title = "Database latency",
                     typeId = updatedType.id,
-                    assigneeId = "user-member"
+                    assigneeId = "user-member",
+                    labels = listOf("Database", "Urgent"),
+                    dueDate = "2026-06-01",
+                    estimate = 13
                 )
             )
         }.body<Ticket>()
         assertEquals("OPS-1", ticket.key)
+        assertEquals(listOf("database", "urgent"), ticket.labels)
 
-        val listedTickets = client.get("/api/tickets?projectId=${project.id}&q=database&typeId=${updatedType.id}") {
+        val listedTickets = client.get("/api/tickets?projectId=${project.id}&q=database&typeId=${updatedType.id}&label=database") {
             auth(adminToken)
         }.body<List<Ticket>>()
         assertTrue(listedTickets.any { it.id == ticket.id })
+
+        val comment = client.post("/api/tickets/${ticket.id}/comments") {
+            auth(adminToken)
+            jsonBody(CreateTicketCommentRequest("Observed during import."))
+        }.body<TicketComment>()
+        assertEquals(ticket.id, comment.ticketId)
+
+        val detail = client.get("/api/tickets/${ticket.id}") {
+            auth(adminToken)
+        }.body<TicketDetailResponse>()
+        assertEquals("Observed during import.", detail.comments.single().body)
+        assertTrue(detail.changes.any { it.field == "ticket" })
+        assertTrue(detail.changes.any { it.field == "comment" })
 
         val deleteUsedType = client.delete("/api/ticket-types/${updatedType.id}") {
             auth(adminToken)

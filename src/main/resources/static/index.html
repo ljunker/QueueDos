@@ -72,6 +72,7 @@
             <select id="typeFilter"></select>
             <select id="priorityFilter"></select>
             <select id="assigneeFilter"></select>
+            <input id="labelFilter" placeholder="Label">
             <select id="sortSelect">
               <option value="number">Ticket number</option>
               <option value="title">Title</option>
@@ -90,11 +91,17 @@
                   <th>Priority</th>
                   <th>Status</th>
                   <th>Assignee</th>
+                  <th>Due</th>
+                  <th>Estimate</th>
                 </tr>
               </thead>
               <tbody id="ticketRows"></tbody>
             </table>
           </div>
+        </section>
+
+        <section id="detailTab" class="tab-panel hidden">
+          <div id="ticketDetail" class="ticket-detail"></div>
         </section>
 
         <section id="adminTab" class="tab-panel hidden">
@@ -180,6 +187,16 @@
         </label>
         <div class="form-grid">
           <label>
+            Labels
+            <input id="ticketLabelsInput" placeholder="bug, customer, blocked">
+          </label>
+          <label>
+            Due date
+            <input id="ticketDueDateInput" type="date">
+          </label>
+        </div>
+        <div class="form-grid">
+          <label>
             Type
             <select id="ticketTypeInput"></select>
           </label>
@@ -194,6 +211,10 @@
           <label>
             Status
             <select id="ticketStatusInput"></select>
+          </label>
+          <label>
+            Estimate
+            <input id="ticketEstimateInput" type="number" min="0" max="999" step="1">
           </label>
         </div>
         <p id="ticketFormError" class="error"></p>

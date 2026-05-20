@@ -6,6 +6,8 @@ import de.ljunker.queuedos.domain.Project
 import de.ljunker.queuedos.domain.PublicUser
 import de.ljunker.queuedos.domain.Role
 import de.ljunker.queuedos.domain.Ticket
+import de.ljunker.queuedos.domain.TicketChange
+import de.ljunker.queuedos.domain.TicketComment
 import de.ljunker.queuedos.domain.TicketType
 import de.ljunker.queuedos.domain.Workflow
 import de.ljunker.queuedos.domain.WorkflowStatus
@@ -38,7 +40,16 @@ data class BootstrapResponse(
     val ticketTypes: List<TicketType>,
     val workflows: List<Workflow>,
     val tickets: List<Ticket>,
+    val comments: List<TicketComment> = emptyList(),
+    val ticketChanges: List<TicketChange> = emptyList(),
     val priorities: List<Priority> = Priority.entries.toList()
+)
+
+@Serializable
+data class TicketDetailResponse(
+    val ticket: Ticket,
+    val comments: List<TicketComment>,
+    val changes: List<TicketChange>
 )
 
 @Serializable
@@ -95,7 +106,10 @@ data class CreateTicketRequest(
     val typeId: String,
     val priority: Priority = Priority.MEDIUM,
     val assigneeId: String? = null,
-    val statusId: String? = null
+    val statusId: String? = null,
+    val labels: List<String> = emptyList(),
+    val dueDate: String? = null,
+    val estimate: Int? = null
 )
 
 @Serializable
@@ -104,12 +118,22 @@ data class UpdateTicketRequest(
     val description: String? = null,
     val typeId: String? = null,
     val priority: Priority? = null,
-    val assigneeId: String? = null
+    val assigneeId: String? = null,
+    val labels: List<String>? = null,
+    val dueDate: String? = null,
+    val estimate: Int? = null,
+    val clearDueDate: Boolean = false,
+    val clearEstimate: Boolean = false
 )
 
 @Serializable
 data class TransitionTicketRequest(
     val toStatusId: String
+)
+
+@Serializable
+data class CreateTicketCommentRequest(
+    val body: String
 )
 
 @Serializable

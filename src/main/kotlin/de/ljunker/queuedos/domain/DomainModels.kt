@@ -85,10 +85,12 @@ data class WorkflowStatus(
 @Serializable
 data class WorkflowTransition(
     val id: String,
-    val fromStatusId: String,
+    val fromStatusId: String? = null,
     val toStatusId: String,
     val allowedRoles: List<Role> = listOf(Role.ADMIN, Role.MEMBER),
-    val requiredFields: List<String> = emptyList()
+    val requiredFields: List<String> = emptyList(),
+    val globalTransition: Boolean = false,
+    val allowBackward: Boolean = true
 )
 
 @Serializable
@@ -113,9 +115,34 @@ data class Ticket(
     val typeId: String,
     val priority: Priority,
     val assigneeId: String? = null,
+    val labels: List<String> = emptyList(),
+    val dueDate: String? = null,
+    val estimate: Int? = null,
     val reporterId: String,
     val createdAt: String,
     val updatedAt: String
+)
+
+@Serializable
+data class TicketComment(
+    val id: String,
+    val organizationId: String,
+    val ticketId: String,
+    val authorId: String,
+    val body: String,
+    val createdAt: String
+)
+
+@Serializable
+data class TicketChange(
+    val id: String,
+    val organizationId: String,
+    val ticketId: String,
+    val actorId: String,
+    val field: String,
+    val oldValue: String? = null,
+    val newValue: String? = null,
+    val createdAt: String
 )
 
 @Serializable
@@ -125,5 +152,7 @@ data class AppData(
     val projects: List<Project> = emptyList(),
     val ticketTypes: List<TicketType> = emptyList(),
     val workflows: List<Workflow> = emptyList(),
-    val tickets: List<Ticket> = emptyList()
+    val tickets: List<Ticket> = emptyList(),
+    val comments: List<TicketComment> = emptyList(),
+    val ticketChanges: List<TicketChange> = emptyList()
 )

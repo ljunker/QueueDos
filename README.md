@@ -22,9 +22,10 @@ Vordefinierte Nutzer:
 - Projektbezogene Ticketschlüssel wie `QDOS-1`.
 - Konfigurierbare Tickettypen.
 - Konfigurierbare Workflows mit Status, Übergängen, Rollenbeschränkungen und Metadaten für Pflichtfelder.
-- Tickets mit Titel, Beschreibung, Status, Typ, Priorität, verantwortlicher Person und meldender Person.
+- Tickets mit Titel, Beschreibung, Status, Typ, Priorität, verantwortlicher Person, Labels, Fälligkeitsdatum, Schätzung und meldender Person.
+- Ticket-Detailansicht mit Kommentaren und Änderungshistorie.
 - Kanban-Board mit Drag-and-Drop.
-- Ticketliste mit Suche, Filtern und Sortierung.
+- Ticketliste mit Suche, Filtern, Sortierung und URL-Zustand.
 - Admin-Oberflächen für Nutzer, Projekte, Tickettypen und Workflows.
 
 Das Docker-Compose-Setup startet PostgreSQL und speichert QueueDos-Daten in relationalen Tabellen für Organisationen, Nutzer, Projekte, Tickettypen, Workflows, Workflow-Status, Workflow-Übergänge und Tickets. Für mehrere API-Container muss `QUEUEDOS_SESSION_SECRET` auf denselben starken Wert gesetzt werden, weil Anmeldungen als signierte stateless Tokens ausgegeben werden.

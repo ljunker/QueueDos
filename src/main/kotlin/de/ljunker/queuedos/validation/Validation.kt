@@ -5,6 +5,8 @@ import de.ljunker.queuedos.domain.Ticket
 import de.ljunker.queuedos.domain.WorkflowStatus
 import de.ljunker.queuedos.domain.WorkflowTransition
 import io.ktor.http.HttpStatusCode
+import java.time.LocalDate
+import java.time.format.DateTimeParseException
 import java.util.Locale
 
 private val projectKeyPattern = Regex("^[A-Z][A-Z0-9]{1,9}$")
@@ -49,6 +51,35 @@ internal fun requirePassword(value: String): String {
     return value
 }
 
+internal fun normalizeLabels(values: List<String>): List<String> =
+    values
+        .map { it.trim().lowercase(Locale.ROOT) }
+        .filter { it.isNotBlank() }
+        .distinct()
+        .also { labels ->
+            if (labels.any { it.length > 32 } || labels.size > 12) {
+                throw ApiException(HttpStatusCode.BadRequest, "Labels must be 12 values or fewer with at most 32 characters each.")
+            }
+        }
+
+internal fun normalizeDueDate(value: String?): String? {
+    val dueDate = value?.trim()?.takeIf { it.isNotBlank() } ?: return null
+    try {
+        LocalDate.parse(dueDate)
+    } catch (_: DateTimeParseException) {
+        throw ApiException(HttpStatusCode.BadRequest, "Due date must use YYYY-MM-DD.")
+    }
+    return dueDate
+}
+
+internal fun normalizeEstimate(value: Int?): Int? {
+    if (value == null) return null
+    if (value < 0 || value > 999) {
+        throw ApiException(HttpStatusCode.BadRequest, "Estimate must be between 0 and 999.")
+    }
+    return value
+}
+
 internal fun normalizeStatuses(
     statuses: List<WorkflowStatus>,
     nextId: (String) -> String
@@ -79,9 +110,10 @@ internal fun normalizeTransitions(
     nextId: (String) -> String
 ): List<WorkflowTransition> {
     return transitions
-        .filter { it.fromStatusId != it.toStatusId }
+        .filter { it.globalTransition || it.fromStatusId != it.toStatusId }
         .map {
-            if (it.fromStatusId !in statusIds || it.toStatusId !in statusIds) {
+            val fromStatusId = it.fromStatusId?.takeIf { value -> value.isNotBlank() }
+            if ((!it.globalTransition && fromStatusId !in statusIds) || it.toStatusId !in statusIds) {
                 throw ApiException(HttpStatusCode.BadRequest, "Workflow transition points to an unknown status.")
             }
             val allowedRoles = it.allowedRoles.distinct().ifEmpty {
@@ -89,11 +121,12 @@ internal fun normalizeTransitions(
             }
             it.copy(
                 id = it.id.ifBlank { nextId("transition") },
+                fromStatusId = if (it.globalTransition) null else fromStatusId,
                 allowedRoles = allowedRoles,
                 requiredFields = it.requiredFields.distinct()
             )
         }
-        .distinctBy { it.fromStatusId to it.toStatusId }
+        .distinctBy { Triple(it.globalTransition, it.fromStatusId, it.toStatusId) }
 }
 
 internal fun validateRequiredFields(ticket: Ticket, requiredFields: List<String>) {
@@ -105,6 +138,9 @@ internal fun validateRequiredFields(ticket: Ticket, requiredFields: List<String>
             "priority" -> false
             "assigneeId" -> ticket.assigneeId.isNullOrBlank()
             "reporterId" -> ticket.reporterId.isBlank()
+            "labels" -> ticket.labels.isEmpty()
+            "dueDate" -> ticket.dueDate.isNullOrBlank()
+            "estimate" -> ticket.estimate == null
             else -> false
         }
         if (missing) {

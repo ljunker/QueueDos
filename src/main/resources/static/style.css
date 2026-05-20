@@ -368,7 +368,7 @@ th {
 
 .filters {
   display: grid;
-  grid-template-columns: minmax(220px, 1.6fr) repeat(5, minmax(140px, 1fr));
+  grid-template-columns: minmax(220px, 1.6fr) repeat(6, minmax(130px, 1fr));
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -464,7 +464,89 @@ tr[data-ticket-id]:hover {
 }
 
 .editor-row.transition-row {
-  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) minmax(150px, 1fr) minmax(170px, 1fr) auto;
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) minmax(150px, 1fr) minmax(170px, 1fr) auto auto auto;
+}
+
+.inline-check {
+  display: inline-flex;
+  grid-template-columns: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.inline-check input {
+  width: auto;
+  min-height: 0;
+}
+
+.ticket-detail {
+  display: grid;
+  gap: 16px;
+}
+
+.detail-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.detail-header h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 16px;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.meta-grid div {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.meta-grid dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.meta-grid dd {
+  margin: 3px 0 0;
+}
+
+.timeline {
+  display: grid;
+  gap: 10px;
+}
+
+.timeline-item {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.timeline-item small {
+  display: block;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.timeline-item p {
+  margin: 8px 0 0;
 }
 
 dialog {
@@ -549,7 +631,8 @@ dialog::backdrop {
 
   .filters,
   .admin-grid,
-  .workflow-editor {
+  .workflow-editor,
+  .detail-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -573,6 +656,8 @@ dialog::backdrop {
   .inline-form,
   .split,
   .form-grid,
+  .detail-header,
+  .meta-grid,
   .editor-row.status-row,
   .editor-row.transition-row {
     grid-template-columns: 1fr;

@@ -55,9 +55,14 @@ internal fun Application.configureRoutes(store: DataStore) {
                     typeId = query["typeId"],
                     priority = query["priority"]?.takeIf { it.isNotBlank() }?.let { parsePriority(it) },
                     assigneeId = query["assigneeId"],
+                    label = query["label"],
                     sort = query["sort"]
                 )
             )
+        }
+
+        get("/api/tickets/{id}") {
+            call.respond(store.ticketDetail(call.requireUser(store), call.pathId()))
         }
 
         post("/api/tickets") {
@@ -70,6 +75,10 @@ internal fun Application.configureRoutes(store: DataStore) {
 
         post("/api/tickets/{id}/transition") {
             call.respond(store.transitionTicket(call.requireUser(store), call.pathId(), call.receive()))
+        }
+
+        post("/api/tickets/{id}/comments") {
+            call.respond(HttpStatusCode.Created, store.addComment(call.requireUser(store), call.pathId(), call.receive()))
         }
 
         delete("/api/tickets/{id}") {

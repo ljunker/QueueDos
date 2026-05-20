@@ -5,6 +5,7 @@ const state = {
   data: null,
   selectedProjectId: null,
   activeTab: "board",
+  detailTicketId: null,
   workflowDraft: null,
   draggedTicketId: null,
 };
@@ -55,14 +56,18 @@ function bindStaticEvents() {
 
   $("#projectSelect").addEventListener("change", () => {
     state.selectedProjectId = $("#projectSelect").value;
+    state.detailTicketId = null;
     resetWorkflowDraft();
     render();
+    syncUrlState();
   });
 
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.addEventListener("click", () => {
       state.activeTab = tab.dataset.tab;
+      state.detailTicketId = null;
       render();
+      syncUrlState();
     });
   });
 
@@ -72,8 +77,11 @@ function bindStaticEvents() {
   $("#ticketForm").addEventListener("submit", saveTicketFromDialog);
   $("#deleteTicketBtn").addEventListener("click", deleteTicketFromDialog);
 
-  ["searchInput", "statusFilter", "typeFilter", "priorityFilter", "assigneeFilter", "sortSelect"].forEach((id) => {
-    $(`#${id}`).addEventListener("input", renderList);
+  ["searchInput", "statusFilter", "typeFilter", "priorityFilter", "assigneeFilter", "labelFilter", "sortSelect"].forEach((id) => {
+    $(`#${id}`).addEventListener("input", () => {
+      renderList();
+      syncUrlState();
+    });
   });
 
   $("#projectForm").addEventListener("submit", createProject);
@@ -82,6 +90,11 @@ function bindStaticEvents() {
   $("#addStatusBtn").addEventListener("click", addDraftStatus);
   $("#addTransitionBtn").addEventListener("click", addDraftTransition);
   $("#saveWorkflowBtn").addEventListener("click", saveWorkflow);
+
+  window.addEventListener("popstate", () => {
+    applyUrlState();
+    render();
+  });
 }
 
 async function api(path, options = {}) {
@@ -117,13 +130,17 @@ async function api(path, options = {}) {
 async function loadBootstrap() {
   const previousProjectId = state.selectedProjectId;
   state.data = await api("/api/bootstrap");
+  applyUrlState();
   const projects = state.data.projects.filter((project) => !project.archived);
   state.selectedProjectId = projects.some((project) => project.id === previousProjectId)
     ? previousProjectId
-    : projects[0]?.id || state.data.projects[0]?.id || null;
+    : state.data.projects.some((project) => project.id === state.selectedProjectId)
+      ? state.selectedProjectId
+      : projects[0]?.id || state.data.projects[0]?.id || null;
   resetWorkflowDraft();
   showApp();
   render();
+  syncUrlState();
 }
 
 function showLogin() {
@@ -154,6 +171,10 @@ function render() {
   if (state.activeTab === "admin" && user.role !== "ADMIN") {
     state.activeTab = "board";
   }
+  if (state.activeTab === "detail" && !ticketById(state.detailTicketId)) {
+    state.activeTab = "board";
+    state.detailTicketId = null;
+  }
 
   document.querySelectorAll(".tab").forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.tab === state.activeTab);
@@ -161,10 +182,12 @@ function render() {
   $("#boardTab").classList.toggle("hidden", state.activeTab !== "board");
   $("#listTab").classList.toggle("hidden", state.activeTab !== "list");
   $("#adminTab").classList.toggle("hidden", state.activeTab !== "admin");
+  $("#detailTab").classList.toggle("hidden", state.activeTab !== "detail");
 
   renderBoard();
   renderFilterOptions();
   renderList();
+  renderTicketDetail();
   if (user.role === "ADMIN") renderAdmin();
 }
 
@@ -209,7 +232,7 @@ function renderBoard() {
     card.addEventListener("dragstart", () => {
       state.draggedTicketId = card.dataset.ticketId;
     });
-    card.addEventListener("click", () => openTicketDialog(ticketById(card.dataset.ticketId)));
+    card.addEventListener("click", () => openTicketDetail(card.dataset.ticketId));
   });
 
   document.querySelectorAll(".column").forEach((column) => {
@@ -254,9 +277,12 @@ function renderTicketCard(ticket) {
       <strong>${escapeHtml(ticket.title)}</strong>
       <div class="badges">
         <span class="badge"><span class="type-dot" style="background:${escapeHtml(type?.color || "#667085")}"></span>${escapeHtml(type?.name || "Type")}</span>
+        ${ticket.labels.map((label) => `<span class="badge">${escapeHtml(label)}</span>`).join("")}
       </div>
       <div class="card-footer">
         <span class="muted">${escapeHtml(assignee?.displayName || "Unassigned")}</span>
+        ${ticket.dueDate ? `<span class="muted">Due ${escapeHtml(ticket.dueDate)}</span>` : ""}
+        ${ticket.estimate !== null && ticket.estimate !== undefined ? `<span class="muted">${ticket.estimate} pts</span>` : ""}
       </div>
     </article>
   `;
@@ -290,15 +316,17 @@ function renderList() {
   const typeId = $("#typeFilter").value;
   const priority = $("#priorityFilter").value;
   const assigneeId = $("#assigneeFilter").value;
+  const label = $("#labelFilter").value.trim().toLowerCase();
   const sort = $("#sortSelect").value;
 
   let tickets = projectTickets().filter((ticket) => {
-    const searchable = `${ticket.key} ${ticket.title} ${ticket.description}`.toLowerCase();
+    const searchable = `${ticket.key} ${ticket.title} ${ticket.description} ${(ticket.labels || []).join(" ")}`.toLowerCase();
     return (!query || searchable.includes(query)) &&
       (!statusId || ticket.statusId === statusId) &&
       (!typeId || ticket.typeId === typeId) &&
       (!priority || ticket.priority === priority) &&
-      (!assigneeId || (assigneeId === "unassigned" ? !ticket.assigneeId : ticket.assigneeId === assigneeId));
+      (!assigneeId || (assigneeId === "unassigned" ? !ticket.assigneeId : ticket.assigneeId === assigneeId)) &&
+      (!label || (ticket.labels || []).includes(label));
   });
 
   tickets = sortTickets(tickets, sort);
@@ -315,12 +343,14 @@ function renderList() {
         <td><span class="badge priority-${ticket.priority.toLowerCase()}">${priorityLabels[ticket.priority]}</span></td>
         <td>${escapeHtml(status?.name || "")}</td>
         <td>${escapeHtml(assignee?.displayName || "Unassigned")}</td>
+        <td>${escapeHtml(ticket.dueDate || "")}</td>
+        <td>${ticket.estimate !== null && ticket.estimate !== undefined ? escapeHtml(ticket.estimate) : ""}</td>
       </tr>
     `;
   }).join("");
 
   document.querySelectorAll("tr[data-ticket-id]").forEach((row) => {
-    row.addEventListener("click", () => openTicketDialog(ticketById(row.dataset.ticketId)));
+    row.addEventListener("click", () => openTicketDetail(row.dataset.ticketId));
   });
 }
 
@@ -347,8 +377,10 @@ function renderProjectList() {
   document.querySelectorAll("[data-select-project]").forEach((button) => {
     button.addEventListener("click", () => {
       state.selectedProjectId = button.dataset.selectProject;
+      state.detailTicketId = null;
       resetWorkflowDraft();
       render();
+      syncUrlState();
     });
   });
 }
@@ -449,6 +481,8 @@ function renderWorkflowEditor() {
       ${statusSelect("toStatusId", transition.toStatusId, workflow.statuses)}
       ${roleSelect(transition.allowedRoles)}
       <input value="${escapeAttribute(transition.requiredFields.join(", "))}" data-transition-field="requiredFields" placeholder="required fields">
+      <label class="inline-check"><input type="checkbox" data-transition-field="globalTransition" ${transition.globalTransition ? "checked" : ""}> Global</label>
+      <label class="inline-check"><input type="checkbox" data-transition-field="allowBackward" ${transition.allowBackward !== false ? "checked" : ""}> Back</label>
       <button data-remove-transition="${index}" type="button">Remove</button>
     </div>
   `).join("");
@@ -459,6 +493,12 @@ function renderWorkflowEditor() {
       const transition = workflow.transitions[Number(row.dataset.transitionIndex)];
       if (input.dataset.transitionField === "requiredFields") {
         transition.requiredFields = input.value.split(",").map((value) => value.trim()).filter(Boolean);
+      } else if (input.dataset.transitionField === "globalTransition") {
+        transition.globalTransition = input.checked;
+        if (input.checked) transition.fromStatusId = null;
+        renderWorkflowEditor();
+      } else if (input.dataset.transitionField === "allowBackward") {
+        transition.allowBackward = input.checked;
       } else if (input.dataset.transitionField === "roles") {
         transition.allowedRoles = input.value === "BOTH" ? ["ADMIN", "MEMBER"] : [input.value];
       } else {
@@ -571,6 +611,8 @@ function addDraftTransition() {
     toStatusId: statuses[1].id,
     allowedRoles: ["ADMIN", "MEMBER"],
     requiredFields: [],
+    globalTransition: false,
+    allowBackward: true,
   });
   renderWorkflowEditor();
 }
@@ -602,6 +644,9 @@ function openTicketDialog(ticket = null) {
   $("#ticketIdInput").value = ticket?.id || "";
   $("#ticketTitleInput").value = ticket?.title || "";
   $("#ticketDescriptionInput").value = ticket?.description || "";
+  $("#ticketLabelsInput").value = (ticket?.labels || []).join(", ");
+  $("#ticketDueDateInput").value = ticket?.dueDate || "";
+  $("#ticketEstimateInput").value = ticket?.estimate !== null && ticket?.estimate !== undefined ? ticket.estimate : "";
   $("#ticketDialogTitle").textContent = ticket ? `${ticket.key}` : "New ticket";
 
   $("#ticketTypeInput").innerHTML = projectTypes().map((type) => {
@@ -635,6 +680,11 @@ async function saveTicketFromDialog(event) {
     typeId: $("#ticketTypeInput").value,
     priority: $("#ticketPriorityInput").value,
     assigneeId: $("#ticketAssigneeInput").value || null,
+    labels: parseLabels($("#ticketLabelsInput").value),
+    dueDate: $("#ticketDueDateInput").value,
+    estimate: $("#ticketEstimateInput").value === "" ? null : Number($("#ticketEstimateInput").value),
+    clearDueDate: $("#ticketDueDateInput").value === "",
+    clearEstimate: $("#ticketEstimateInput").value === "",
   };
 
   try {
@@ -660,6 +710,7 @@ async function saveTicketFromDialog(event) {
     }
     $("#ticketDialog").close();
     await loadBootstrap();
+    if (ticketId) openTicketDetail(ticketId, false);
   } catch (error) {
     $("#ticketFormError").textContent = error.message;
   }
@@ -671,10 +722,106 @@ async function deleteTicketFromDialog() {
   try {
     await api(`/api/tickets/${ticketId}`, { method: "DELETE" });
     $("#ticketDialog").close();
+    state.detailTicketId = null;
+    state.activeTab = "board";
     await loadBootstrap();
   } catch (error) {
     $("#ticketFormError").textContent = error.message;
   }
+}
+
+function openTicketDetail(ticketId, updateUrl = true) {
+  if (!ticketById(ticketId)) return;
+  state.detailTicketId = ticketId;
+  state.activeTab = "detail";
+  render();
+  if (updateUrl) syncUrlState();
+}
+
+function renderTicketDetail() {
+  const container = $("#ticketDetail");
+  if (!container) return;
+  const ticket = ticketById(state.detailTicketId);
+  if (!ticket) {
+    container.innerHTML = `<p class="muted">No ticket selected.</p>`;
+    return;
+  }
+
+  const type = typeById(ticket.typeId);
+  const status = statusById(ticket.statusId);
+  const assignee = userById(ticket.assigneeId);
+  const reporter = userById(ticket.reporterId);
+  const comments = commentsForTicket(ticket.id);
+  const changes = changesForTicket(ticket.id);
+
+  container.innerHTML = `
+    <div class="detail-header">
+      <button type="button" id="backToListBtn">Back</button>
+      <div>
+        <p class="eyebrow">${escapeHtml(ticket.key)}</p>
+        <h2>${escapeHtml(ticket.title)}</h2>
+      </div>
+      <button type="button" id="editTicketBtn" class="primary">Edit</button>
+    </div>
+    <div class="detail-grid">
+      <section class="panel">
+        <h3>Details</h3>
+        <p>${escapeHtml(ticket.description || "No description")}</p>
+        <div class="badges">
+          <span class="badge">${escapeHtml(status?.name || "Status")}</span>
+          <span class="badge"><span class="type-dot" style="background:${escapeHtml(type?.color || "#667085")}"></span>${escapeHtml(type?.name || "Type")}</span>
+          <span class="badge priority-${ticket.priority.toLowerCase()}">${priorityLabels[ticket.priority]}</span>
+          ${ticket.labels.map((label) => `<span class="badge">${escapeHtml(label)}</span>`).join("")}
+        </div>
+        <dl class="meta-grid">
+          <div><dt>Assignee</dt><dd>${escapeHtml(assignee?.displayName || "Unassigned")}</dd></div>
+          <div><dt>Reporter</dt><dd>${escapeHtml(reporter?.displayName || "")}</dd></div>
+          <div><dt>Due</dt><dd>${escapeHtml(ticket.dueDate || "-")}</dd></div>
+          <div><dt>Estimate</dt><dd>${ticket.estimate !== null && ticket.estimate !== undefined ? escapeHtml(ticket.estimate) : "-"}</dd></div>
+        </dl>
+      </section>
+      <section class="panel">
+        <h3>Comments</h3>
+        <form id="commentForm" class="stack">
+          <textarea id="commentBody" rows="3" placeholder="Add a comment"></textarea>
+          <button type="submit">Add comment</button>
+          <p id="commentError" class="error"></p>
+        </form>
+        <div class="timeline">
+          ${comments.map(renderComment).join("") || `<p class="muted">No comments</p>`}
+        </div>
+      </section>
+      <section class="panel wide">
+        <h3>History</h3>
+        <div class="timeline">
+          ${changes.map(renderChange).join("") || `<p class="muted">No changes</p>`}
+        </div>
+      </section>
+    </div>
+  `;
+
+  $("#backToListBtn").addEventListener("click", () => {
+    state.activeTab = "list";
+    state.detailTicketId = null;
+    render();
+    syncUrlState();
+  });
+  $("#editTicketBtn").addEventListener("click", () => openTicketDialog(ticket));
+  $("#commentForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const body = $("#commentBody").value.trim();
+    if (!body) return;
+    try {
+      await api(`/api/tickets/${ticket.id}/comments`, {
+        method: "POST",
+        body: { body },
+      });
+      await loadBootstrap();
+      openTicketDetail(ticket.id, false);
+    } catch (error) {
+      $("#commentError").textContent = error.message;
+    }
+  });
 }
 
 function selectedProject() {
@@ -703,6 +850,18 @@ function projectTypes() {
   return state.data.ticketTypes.filter((type) => type.projectId === state.selectedProjectId);
 }
 
+function commentsForTicket(ticketId) {
+  return (state.data.comments || [])
+    .filter((comment) => comment.ticketId === ticketId)
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+function changesForTicket(ticketId) {
+  return (state.data.ticketChanges || [])
+    .filter((change) => change.ticketId === ticketId)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 function activeUsers() {
   return state.data.users.filter((user) => user.active);
 }
@@ -728,9 +887,11 @@ function canTransition(ticket, toStatusId) {
   const workflow = selectedWorkflow();
   if (!workflow) return false;
   return workflow.transitions.some((transition) => {
-    return transition.fromStatusId === ticket.statusId &&
+    const backward = statusRank(workflow, toStatusId) < statusRank(workflow, ticket.statusId);
+    return (transition.globalTransition || transition.fromStatusId === ticket.statusId) &&
       transition.toStatusId === toStatusId &&
-      transition.allowedRoles.includes(state.data.currentUser.role);
+      transition.allowedRoles.includes(state.data.currentUser.role) &&
+      (!backward || transition.allowBackward !== false);
   });
 }
 
@@ -761,6 +922,79 @@ function optionExists(selector, value) {
 
 function roleLabel(role) {
   return role === "ADMIN" ? "Admin" : "Member";
+}
+
+function renderComment(comment) {
+  const author = userById(comment.authorId);
+  return `
+    <article class="timeline-item">
+      <strong>${escapeHtml(author?.displayName || "User")}</strong>
+      <small>${formatDateTime(comment.createdAt)}</small>
+      <p>${escapeHtml(comment.body)}</p>
+    </article>
+  `;
+}
+
+function renderChange(change) {
+  const actor = userById(change.actorId);
+  const value = change.oldValue === null && change.newValue === "created"
+    ? "created ticket"
+    : `${escapeHtml(change.field)}: ${escapeHtml(change.oldValue || "-")} -> ${escapeHtml(change.newValue || "-")}`;
+  return `
+    <article class="timeline-item">
+      <strong>${escapeHtml(actor?.displayName || "User")}</strong>
+      <small>${formatDateTime(change.createdAt)}</small>
+      <p>${value}</p>
+    </article>
+  `;
+}
+
+function parseLabels(value) {
+  return value.split(",").map((label) => label.trim()).filter(Boolean);
+}
+
+function formatDateTime(value) {
+  if (!value) return "";
+  return new Date(value).toLocaleString();
+}
+
+function applyUrlState() {
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get("tab");
+  if (["board", "list", "admin", "detail"].includes(tab)) {
+    state.activeTab = tab;
+  }
+  state.detailTicketId = params.get("ticketId");
+  state.selectedProjectId = params.get("projectId") || state.selectedProjectId;
+  $("#searchInput").value = params.get("q") || "";
+  $("#statusFilter").value = params.get("statusId") || "";
+  $("#typeFilter").value = params.get("typeId") || "";
+  $("#priorityFilter").value = params.get("priority") || "";
+  $("#assigneeFilter").value = params.get("assigneeId") || "";
+  $("#labelFilter").value = params.get("label") || "";
+  $("#sortSelect").value = params.get("sort") || "number";
+}
+
+function syncUrlState() {
+  if (!state.data) return;
+  const params = new URLSearchParams();
+  if (state.activeTab !== "board") params.set("tab", state.activeTab);
+  if (state.selectedProjectId) params.set("projectId", state.selectedProjectId);
+  if (state.detailTicketId) params.set("ticketId", state.detailTicketId);
+  setParam(params, "q", $("#searchInput").value.trim());
+  setParam(params, "statusId", $("#statusFilter").value);
+  setParam(params, "typeId", $("#typeFilter").value);
+  setParam(params, "priority", $("#priorityFilter").value);
+  setParam(params, "assigneeId", $("#assigneeFilter").value);
+  setParam(params, "label", $("#labelFilter").value.trim());
+  setParam(params, "sort", $("#sortSelect").value === "number" ? "" : $("#sortSelect").value);
+  const query = params.toString();
+  const nextUrl = query ? `${window.location.pathname}?${query}` : window.location.pathname;
+  window.history.replaceState(null, "", nextUrl);
+}
+
+function setParam(params, key, value) {
+  if (value) params.set(key, value);
 }
 
 function showToast(message) {

@@ -6,6 +6,8 @@ import de.ljunker.queuedos.domain.Priority
 import de.ljunker.queuedos.domain.Project
 import de.ljunker.queuedos.domain.Role
 import de.ljunker.queuedos.domain.Ticket
+import de.ljunker.queuedos.domain.TicketChange
+import de.ljunker.queuedos.domain.TicketComment
 import de.ljunker.queuedos.domain.TicketType
 import de.ljunker.queuedos.domain.User
 import de.ljunker.queuedos.domain.Workflow
@@ -171,7 +173,7 @@ class PostgreSqlAppDataStorage(
             }.groupBy({ it.workflowId to it.transitionId }, { it.fieldName })
             val transitionsByWorkflow = connection.query(
                 """
-                SELECT workflow_id, id, from_status_id, to_status_id
+                SELECT workflow_id, id, from_status_id, to_status_id, global_transition, allow_backward
                 FROM queuedos_workflow_transitions
                 ORDER BY workflow_id, id
                 """.trimIndent()
@@ -185,7 +187,9 @@ class PostgreSqlAppDataStorage(
                         fromStatusId = result.getString("from_status_id"),
                         toStatusId = result.getString("to_status_id"),
                         allowedRoles = rolesByTransition[workflowId to transitionId].orEmpty(),
-                        requiredFields = requiredFieldsByTransition[workflowId to transitionId].orEmpty()
+                        requiredFields = requiredFieldsByTransition[workflowId to transitionId].orEmpty(),
+                        globalTransition = result.getBoolean("global_transition"),
+                        allowBackward = result.getBoolean("allow_backward")
                     )
                 )
             }.groupBy({ it.workflowId }, { it.transition })
@@ -205,16 +209,26 @@ class PostgreSqlAppDataStorage(
                     transitions = transitionsByWorkflow[workflowId].orEmpty()
                 )
             }
+            val labelsByTicket = connection.query(
+                """
+                SELECT ticket_id, label
+                FROM queuedos_ticket_labels
+                ORDER BY ticket_id, sort_order
+                """.trimIndent()
+            ) { result ->
+                result.getString("ticket_id") to result.getString("label")
+            }.groupBy({ it.first }, { it.second })
             val tickets = connection.query(
                 """
                 SELECT id, organization_id, project_id, number, key, title, description, status_id, type_id,
-                       priority, assignee_id, reporter_id, created_at, updated_at
+                       priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at
                 FROM queuedos_tickets
                 ORDER BY project_id, number
                 """.trimIndent()
             ) { result ->
+                val ticketId = result.getString("id")
                 Ticket(
-                    id = result.getString("id"),
+                    id = ticketId,
                     organizationId = result.getString("organization_id"),
                     projectId = result.getString("project_id"),
                     number = result.getInt("number"),
@@ -225,9 +239,46 @@ class PostgreSqlAppDataStorage(
                     typeId = result.getString("type_id"),
                     priority = Priority.valueOf(result.getString("priority")),
                     assigneeId = result.getString("assignee_id"),
+                    labels = labelsByTicket[ticketId].orEmpty(),
+                    dueDate = result.getString("due_date"),
+                    estimate = result.getNullableInt("estimate"),
                     reporterId = result.getString("reporter_id"),
                     createdAt = result.getString("created_at"),
                     updatedAt = result.getString("updated_at")
+                )
+            }
+            val comments = connection.query(
+                """
+                SELECT id, organization_id, ticket_id, author_id, body, created_at
+                FROM queuedos_ticket_comments
+                ORDER BY ticket_id, created_at
+                """.trimIndent()
+            ) { result ->
+                TicketComment(
+                    id = result.getString("id"),
+                    organizationId = result.getString("organization_id"),
+                    ticketId = result.getString("ticket_id"),
+                    authorId = result.getString("author_id"),
+                    body = result.getString("body"),
+                    createdAt = result.getString("created_at")
+                )
+            }
+            val changes = connection.query(
+                """
+                SELECT id, organization_id, ticket_id, actor_id, field_name, old_value, new_value, created_at
+                FROM queuedos_ticket_changes
+                ORDER BY ticket_id, created_at
+                """.trimIndent()
+            ) { result ->
+                TicketChange(
+                    id = result.getString("id"),
+                    organizationId = result.getString("organization_id"),
+                    ticketId = result.getString("ticket_id"),
+                    actorId = result.getString("actor_id"),
+                    field = result.getString("field_name"),
+                    oldValue = result.getString("old_value"),
+                    newValue = result.getString("new_value"),
+                    createdAt = result.getString("created_at")
                 )
             }
 
@@ -237,7 +288,9 @@ class PostgreSqlAppDataStorage(
                 projects = projects,
                 ticketTypes = ticketTypes,
                 workflows = workflows,
-                tickets = tickets
+                tickets = tickets,
+                comments = comments,
+                ticketChanges = changes
             )
         }
     }
@@ -274,6 +327,9 @@ class PostgreSqlAppDataStorage(
             insertWorkflowTransitionRoles(snapshot.workflows)
             insertWorkflowTransitionRequiredFields(snapshot.workflows)
             insertTickets(snapshot.tickets)
+            insertTicketLabels(snapshot.tickets)
+            insertTicketComments(snapshot.comments)
+            insertTicketChanges(snapshot.ticketChanges)
             commit()
         } catch (error: Exception) {
             rollback()
@@ -285,6 +341,9 @@ class PostgreSqlAppDataStorage(
 
     private fun Connection.deleteData() {
         listOf(
+            "queuedos_ticket_changes",
+            "queuedos_ticket_comments",
+            "queuedos_ticket_labels",
             "queuedos_tickets",
             "queuedos_workflow_transition_required_fields",
             "queuedos_workflow_transition_roles",
@@ -416,16 +475,18 @@ class PostgreSqlAppDataStorage(
         batch(
             """
             INSERT INTO queuedos_workflow_transitions
-                (workflow_id, id, from_status_id, to_status_id)
-            VALUES (?, ?, ?, ?)
+                (workflow_id, id, from_status_id, to_status_id, global_transition, allow_backward)
+            VALUES (?, ?, ?, ?, ?, ?)
             """.trimIndent()
         ) { statement ->
             workflows.forEach { workflow ->
                 workflow.transitions.forEach { transition ->
                     statement.setString(1, workflow.id)
                     statement.setString(2, transition.id)
-                    statement.setString(3, transition.fromStatusId)
+                    statement.setNullableString(3, transition.fromStatusId)
                     statement.setString(4, transition.toStatusId)
+                    statement.setBoolean(5, transition.globalTransition)
+                    statement.setBoolean(6, transition.allowBackward)
                     statement.addBatch()
                 }
             }
@@ -481,8 +542,8 @@ class PostgreSqlAppDataStorage(
             """
             INSERT INTO queuedos_tickets
                 (id, organization_id, project_id, number, key, title, description, status_id, type_id,
-                 priority, assignee_id, reporter_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent()
         ) { statement ->
             tickets.forEach { ticket ->
@@ -497,9 +558,71 @@ class PostgreSqlAppDataStorage(
                 statement.setString(9, ticket.typeId)
                 statement.setString(10, ticket.priority.name)
                 statement.setNullableString(11, ticket.assigneeId)
-                statement.setString(12, ticket.reporterId)
-                statement.setString(13, ticket.createdAt)
-                statement.setString(14, ticket.updatedAt)
+                statement.setNullableString(12, ticket.dueDate)
+                statement.setNullableInt(13, ticket.estimate)
+                statement.setString(14, ticket.reporterId)
+                statement.setString(15, ticket.createdAt)
+                statement.setString(16, ticket.updatedAt)
+                statement.addBatch()
+            }
+        }
+    }
+
+    private fun Connection.insertTicketLabels(tickets: List<Ticket>) {
+        batch(
+            """
+            INSERT INTO queuedos_ticket_labels (ticket_id, label, sort_order)
+            VALUES (?, ?, ?)
+            """.trimIndent()
+        ) { statement ->
+            tickets.forEach { ticket ->
+                ticket.labels.forEachIndexed { index, label ->
+                    statement.setString(1, ticket.id)
+                    statement.setString(2, label)
+                    statement.setInt(3, index)
+                    statement.addBatch()
+                }
+            }
+        }
+    }
+
+    private fun Connection.insertTicketComments(comments: List<TicketComment>) {
+        batch(
+            """
+            INSERT INTO queuedos_ticket_comments
+                (id, organization_id, ticket_id, author_id, body, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """.trimIndent()
+        ) { statement ->
+            comments.forEach { comment ->
+                statement.setString(1, comment.id)
+                statement.setString(2, comment.organizationId)
+                statement.setString(3, comment.ticketId)
+                statement.setString(4, comment.authorId)
+                statement.setString(5, comment.body)
+                statement.setString(6, comment.createdAt)
+                statement.addBatch()
+            }
+        }
+    }
+
+    private fun Connection.insertTicketChanges(changes: List<TicketChange>) {
+        batch(
+            """
+            INSERT INTO queuedos_ticket_changes
+                (id, organization_id, ticket_id, actor_id, field_name, old_value, new_value, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent()
+        ) { statement ->
+            changes.forEach { change ->
+                statement.setString(1, change.id)
+                statement.setString(2, change.organizationId)
+                statement.setString(3, change.ticketId)
+                statement.setString(4, change.actorId)
+                statement.setString(5, change.field)
+                statement.setNullableString(6, change.oldValue)
+                statement.setNullableString(7, change.newValue)
+                statement.setString(8, change.createdAt)
                 statement.addBatch()
             }
         }
@@ -543,6 +666,19 @@ class PostgreSqlAppDataStorage(
         } else {
             setString(index, value)
         }
+    }
+
+    private fun PreparedStatement.setNullableInt(index: Int, value: Int?) {
+        if (value == null) {
+            setNull(index, java.sql.Types.INTEGER)
+        } else {
+            setInt(index, value)
+        }
+    }
+
+    private fun ResultSet.getNullableInt(column: String): Int? {
+        val value = getInt(column)
+        return if (wasNull()) null else value
     }
 
     private fun connection() =
@@ -641,8 +777,10 @@ class PostgreSqlAppDataStorage(
         CREATE TABLE IF NOT EXISTS queuedos_workflow_transitions (
             workflow_id text NOT NULL REFERENCES queuedos_workflows(id) ON DELETE CASCADE,
             id text NOT NULL,
-            from_status_id text NOT NULL,
+            from_status_id text,
             to_status_id text NOT NULL,
+            global_transition boolean NOT NULL DEFAULT false,
+            allow_backward boolean NOT NULL DEFAULT true,
             PRIMARY KEY (workflow_id, id),
             UNIQUE (workflow_id, from_status_id, to_status_id),
             FOREIGN KEY (workflow_id, from_status_id)
@@ -686,6 +824,8 @@ class PostgreSqlAppDataStorage(
             type_id text NOT NULL REFERENCES queuedos_ticket_types(id),
             priority text NOT NULL CHECK (priority IN ('LOW', 'MEDIUM', 'HIGH', 'CRITICAL')),
             assignee_id text REFERENCES queuedos_users(id),
+            due_date text,
+            estimate integer CHECK (estimate IS NULL OR estimate >= 0),
             reporter_id text NOT NULL REFERENCES queuedos_users(id),
             created_at text NOT NULL,
             updated_at text NOT NULL,
@@ -693,12 +833,50 @@ class PostgreSqlAppDataStorage(
             UNIQUE (organization_id, key)
         )
         """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS queuedos_ticket_labels (
+            ticket_id text NOT NULL REFERENCES queuedos_tickets(id) ON DELETE CASCADE,
+            label text NOT NULL,
+            sort_order integer NOT NULL,
+            PRIMARY KEY (ticket_id, label)
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS queuedos_ticket_comments (
+            id text PRIMARY KEY,
+            organization_id text NOT NULL REFERENCES queuedos_organizations(id) ON DELETE CASCADE,
+            ticket_id text NOT NULL REFERENCES queuedos_tickets(id) ON DELETE CASCADE,
+            author_id text NOT NULL REFERENCES queuedos_users(id),
+            body text NOT NULL,
+            created_at text NOT NULL
+        )
+        """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS queuedos_ticket_changes (
+            id text PRIMARY KEY,
+            organization_id text NOT NULL REFERENCES queuedos_organizations(id) ON DELETE CASCADE,
+            ticket_id text NOT NULL REFERENCES queuedos_tickets(id) ON DELETE CASCADE,
+            actor_id text NOT NULL REFERENCES queuedos_users(id),
+            field_name text NOT NULL,
+            old_value text,
+            new_value text,
+            created_at text NOT NULL
+        )
+        """.trimIndent(),
+        "ALTER TABLE queuedos_workflow_transitions ALTER COLUMN from_status_id DROP NOT NULL",
+        "ALTER TABLE queuedos_workflow_transitions ADD COLUMN IF NOT EXISTS global_transition boolean NOT NULL DEFAULT false",
+        "ALTER TABLE queuedos_workflow_transitions ADD COLUMN IF NOT EXISTS allow_backward boolean NOT NULL DEFAULT true",
+        "ALTER TABLE queuedos_tickets ADD COLUMN IF NOT EXISTS due_date text",
+        "ALTER TABLE queuedos_tickets ADD COLUMN IF NOT EXISTS estimate integer",
         "CREATE INDEX IF NOT EXISTS idx_queuedos_users_organization ON queuedos_users(organization_id)",
         "CREATE INDEX IF NOT EXISTS idx_queuedos_projects_organization ON queuedos_projects(organization_id)",
         "CREATE INDEX IF NOT EXISTS idx_queuedos_ticket_types_project ON queuedos_ticket_types(project_id)",
         "CREATE INDEX IF NOT EXISTS idx_queuedos_workflows_project ON queuedos_workflows(project_id)",
         "CREATE INDEX IF NOT EXISTS idx_queuedos_tickets_project ON queuedos_tickets(project_id)",
         "CREATE INDEX IF NOT EXISTS idx_queuedos_tickets_status ON queuedos_tickets(status_id)",
-        "CREATE INDEX IF NOT EXISTS idx_queuedos_tickets_assignee ON queuedos_tickets(assignee_id)"
+        "CREATE INDEX IF NOT EXISTS idx_queuedos_tickets_assignee ON queuedos_tickets(assignee_id)",
+        "CREATE INDEX IF NOT EXISTS idx_queuedos_ticket_labels_label ON queuedos_ticket_labels(label)",
+        "CREATE INDEX IF NOT EXISTS idx_queuedos_ticket_comments_ticket ON queuedos_ticket_comments(ticket_id)",
+        "CREATE INDEX IF NOT EXISTS idx_queuedos_ticket_changes_ticket ON queuedos_ticket_changes(ticket_id)"
     )
 }

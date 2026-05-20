@@ -22,6 +22,9 @@ class StaticUiContractTest {
         assertContains(html, "id=\"newTicketBtn\"")
         assertContains(html, "id=\"ticketDialog\"")
         assertContains(html, "id=\"ticketForm\"")
+        assertContains(html, "id=\"ticketLabelsInput\"")
+        assertContains(html, "id=\"ticketDueDateInput\"")
+        assertContains(html, "id=\"ticketEstimateInput\"")
         assertContains(script, "openTicketDialog()")
         assertContains(script, "saveTicketFromDialog")
         assertContains(script, "await api(\"/api/tickets\"")
@@ -45,7 +48,21 @@ class StaticUiContractTest {
         assertContains(html, "id=\"saveWorkflowBtn\"")
         assertContains(script, "renderWorkflowEditor")
         assertContains(script, "saveWorkflow")
+        assertContains(script, "globalTransition")
+        assertContains(script, "allowBackward")
         assertContains(script, "/api/projects/${'$'}{project.id}/workflow")
+    }
+
+    @Test
+    fun ticketDetailAndUrlStateContractsArePresent() {
+        assertContains(html, "id=\"detailTab\"")
+        assertContains(html, "id=\"ticketDetail\"")
+        assertContains(html, "id=\"labelFilter\"")
+        assertContains(script, "openTicketDetail")
+        assertContains(script, "renderTicketDetail")
+        assertContains(script, "/api/tickets/${'$'}{ticket.id}/comments")
+        assertContains(script, "new URLSearchParams(window.location.search)")
+        assertContains(script, "window.history.replaceState")
     }
 
     private fun resource(path: String): String =

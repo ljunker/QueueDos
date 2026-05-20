@@ -10,13 +10,12 @@
 
 ## Fachliche MVP-Erweiterungen
 
-- Kommentare pro Ticket hinzufügen.
-- Änderungshistorie für Statuswechsel und Feldänderungen ergänzen.
-- Labels, Fälligkeitsdatum und Schätzung als optionale Ticketfelder einführen.
-- Anhänge über lokalen Speicher im Docker-MVP oder direkt über S3-kompatiblen Object Storage vorbereiten.
-- Ticket-Detailseite als eigene Ansicht ergänzen, nicht nur als Dialog.
-- Such- und Filterzustand in der URL speichern.
-- Workflow-Regeln ausbauen: Pflichtfelder, erlaubte Rollen, Rücksprünge, globale Übergänge.
+- [x] Kommentare pro Ticket hinzufügen.
+- [x] Änderungshistorie für Statuswechsel und Feldänderungen ergänzen.
+- [x] Labels, Fälligkeitsdatum und Schätzung als optionale Ticketfelder einführen.
+- [x] Ticket-Detailseite als eigene Ansicht ergänzen, nicht nur als Dialog.
+- [x] Such- und Filterzustand in der URL speichern.
+- [x] Workflow-Regeln ausbauen: Pflichtfelder, erlaubte Rollen, Rücksprünge, globale Übergänge.
 
 ## Mandantenfähigkeit
 
@@ -62,3 +61,4 @@
 - Marketplace-ähnliche Plugin-Struktur.
 - Vollständiges Jira-Rechtemodell.
 - OAuth/SSO, bevor die lokale Auth-Schicht sauber modularisiert ist.
+- Anhänge über lokalen Speicher im Docker-MVP oder direkt über S3-kompatiblen Object Storage vorbereiten.
