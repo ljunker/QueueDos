@@ -143,6 +143,18 @@ export class QueueEffects {
     )
   );
 
+  readonly bulkUpdateTickets$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.ticketsBulkUpdateRequested),
+      concatMap(({ request }) =>
+        this.api.bulkUpdateTickets(request).pipe(
+          map(() => QueueActions.mutationSucceeded({ message: 'Tickets updated.' })),
+          catchError((error: unknown) => of(QueueActions.mutationFailed({ error: errorMessage(error, 'Tickets could not be updated.') })))
+        )
+      )
+    )
+  );
+
   readonly createComment$ = createEffect(() =>
     this.actions$.pipe(
       ofType(QueueActions.commentCreateRequested),
@@ -241,6 +253,42 @@ export class QueueEffects {
     )
   );
 
+  readonly createSavedTicketFilter$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.savedTicketFilterCreateRequested),
+      concatMap(({ request }) =>
+        this.api.createSavedTicketFilter(request).pipe(
+          map(() => QueueActions.mutationSucceeded({ message: 'Filter saved.' })),
+          catchError((error: unknown) => of(QueueActions.mutationFailed({ error: errorMessage(error, 'Filter could not be saved.') })))
+        )
+      )
+    )
+  );
+
+  readonly updateSavedTicketFilter$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.savedTicketFilterUpdateRequested),
+      concatMap(({ filterId, request }) =>
+        this.api.updateSavedTicketFilter(filterId, request).pipe(
+          map(() => QueueActions.mutationSucceeded({ message: 'Filter updated.' })),
+          catchError((error: unknown) => of(QueueActions.mutationFailed({ error: errorMessage(error, 'Filter could not be updated.') })))
+        )
+      )
+    )
+  );
+
+  readonly deleteSavedTicketFilter$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.savedTicketFilterDeleteRequested),
+      concatMap(({ filterId }) =>
+        this.api.deleteSavedTicketFilter(filterId).pipe(
+          map(() => QueueActions.mutationSucceeded({ message: 'Filter deleted.' })),
+          catchError((error: unknown) => of(QueueActions.mutationFailed({ error: errorMessage(error, 'Filter could not be deleted.') })))
+        )
+      )
+    )
+  );
+
   readonly reloadAfterMutation$ = createEffect(() =>
     this.actions$.pipe(
       ofType(QueueActions.mutationSucceeded),
@@ -264,7 +312,9 @@ export class QueueEffects {
           QueueActions.tabSelected,
           QueueActions.ticketDetailOpened,
           QueueActions.detailClosed,
-          QueueActions.filtersChanged
+          QueueActions.filtersChanged,
+          QueueActions.myTicketsFiltersChanged,
+          QueueActions.savedTicketFilterApplied
         ),
         debounceTime(0),
         withLatestFrom(this.store.select(selectUrlQueryParams)),

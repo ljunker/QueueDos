@@ -48,7 +48,9 @@
 - Persönliche Arbeitsansicht: „Meine Tickets“.
 - Projekt-Dashboard mit Ticketzahlen nach Status, Priorität und Verantwortlichem.
 - Gespeicherte Filter.
-- Board-Spalten pro Projekt frei sortierbar machen.
+- Eigene Boards pro Projekt.
+- Eigene Board Spalten pro Board.
+- Board-Spalten frei sortierbar machen.
 - Bulk-Aktionen in der Liste.
 - Import und Export für Tickets.
 - Webhooks für Statuswechsel.

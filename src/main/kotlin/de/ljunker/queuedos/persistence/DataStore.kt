@@ -2,6 +2,8 @@ package de.ljunker.queuedos.persistence
 
 import de.ljunker.queuedos.api.ApiException
 import de.ljunker.queuedos.api.BootstrapResponse
+import de.ljunker.queuedos.api.BulkUpdateTicketsRequest
+import de.ljunker.queuedos.api.CreateSavedTicketFilterRequest
 import de.ljunker.queuedos.api.CreateTicketCommentRequest
 import de.ljunker.queuedos.api.CreateProjectRequest
 import de.ljunker.queuedos.api.CreateTicketRequest
@@ -13,6 +15,7 @@ import de.ljunker.queuedos.api.SaveWorkflowRequest
 import de.ljunker.queuedos.api.TicketDetailResponse
 import de.ljunker.queuedos.api.TransitionTicketRequest
 import de.ljunker.queuedos.api.UpdateProjectRequest
+import de.ljunker.queuedos.api.UpdateSavedTicketFilterRequest
 import de.ljunker.queuedos.api.UpdateTicketRequest
 import de.ljunker.queuedos.api.UpdateTicketTypeRequest
 import de.ljunker.queuedos.api.UpdateUserRequest
@@ -21,6 +24,9 @@ import de.ljunker.queuedos.domain.Priority
 import de.ljunker.queuedos.domain.Project
 import de.ljunker.queuedos.domain.PublicUser
 import de.ljunker.queuedos.domain.Role
+import de.ljunker.queuedos.domain.SavedTicketFilter
+import de.ljunker.queuedos.domain.SavedTicketFilterCriteria
+import de.ljunker.queuedos.domain.SavedTicketFilterView
 import de.ljunker.queuedos.domain.Ticket
 import de.ljunker.queuedos.domain.TicketChange
 import de.ljunker.queuedos.domain.TicketComment
@@ -106,6 +112,9 @@ class DataStore(
             tickets = data.tickets.filter { it.organizationId == organizationId },
             comments = data.comments.filter { it.organizationId == organizationId },
             ticketChanges = data.ticketChanges.filter { it.organizationId == organizationId },
+            savedTicketFilters = data.savedTicketFilters.filter {
+                it.organizationId == organizationId && it.ownerId == user.id
+            },
             priorities = Priority.entries.toList()
         )
     }
@@ -404,6 +413,51 @@ class DataStore(
         updated
     }
 
+    fun bulkUpdateTickets(actor: User, request: BulkUpdateTicketsRequest): List<Ticket> = synchronized(lock) {
+        val ticketIds = request.ticketIds.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        if (ticketIds.isEmpty()) {
+            throw ApiException(HttpStatusCode.BadRequest, "At least one ticket is required.")
+        }
+        if (request.clearAssignee && !request.assigneeId.isNullOrBlank()) {
+            throw ApiException(HttpStatusCode.BadRequest, "Bulk update cannot set and clear an assignee at once.")
+        }
+        val assigneeId = request.assigneeId?.takeIf { it.isNotBlank() }
+        if (!request.clearAssignee && assigneeId == null && request.priority == null) {
+            throw ApiException(HttpStatusCode.BadRequest, "Bulk update needs an assignee or priority change.")
+        }
+        requireAssignee(actor, assigneeId)
+
+        val currentTickets = ticketIds.map { ticketId ->
+            val ticket = requireTicket(actor, ticketId)
+            val project = requireProject(actor, ticket.projectId)
+            if (project.archived) {
+                throw ApiException(HttpStatusCode.Conflict, "Archived project tickets cannot be edited.")
+            }
+            ticket
+        }
+        val timestamp = now()
+        val updatedById = currentTickets.associate { ticket ->
+            ticket.id to ticket.copy(
+                priority = request.priority ?: ticket.priority,
+                assigneeId = when {
+                    request.clearAssignee -> null
+                    assigneeId != null -> assigneeId
+                    else -> ticket.assigneeId
+                },
+                updatedAt = timestamp
+            )
+        }
+        val changes = currentTickets.flatMap { ticket ->
+            ticketChanges(actor, ticket, updatedById.getValue(ticket.id), timestamp)
+        }
+        data = data.copy(
+            tickets = data.tickets.map { updatedById[it.id] ?: it },
+            ticketChanges = data.ticketChanges + changes
+        )
+        saveLocked()
+        currentTickets.map { updatedById.getValue(it.id) }
+    }
+
     fun transitionTicket(actor: User, ticketId: String, request: TransitionTicketRequest): Ticket = synchronized(lock) {
         val current = requireTicket(actor, ticketId)
         val project = requireProject(actor, current.projectId)
@@ -477,6 +531,54 @@ class DataStore(
         comment
     }
 
+    fun createSavedTicketFilter(actor: User, request: CreateSavedTicketFilterRequest): SavedTicketFilter = synchronized(lock) {
+        val projectId = normalizeSavedFilterProjectContext(actor, request.view, request.projectId)
+        val name = requireName(request.name, "Saved filter name")
+        requireUniqueSavedFilterName(actor, request.view, projectId, name, null)
+        val savedFilter = SavedTicketFilter(
+            id = id("filter"),
+            organizationId = actor.organizationId,
+            ownerId = actor.id,
+            name = name,
+            view = request.view,
+            projectId = projectId,
+            filters = normalizeSavedFilterCriteria(actor, request.view, projectId, request.filters)
+        )
+        data = data.copy(savedTicketFilters = data.savedTicketFilters + savedFilter)
+        saveLocked()
+        savedFilter
+    }
+
+    fun updateSavedTicketFilter(
+        actor: User,
+        filterId: String,
+        request: UpdateSavedTicketFilterRequest
+    ): SavedTicketFilter = synchronized(lock) {
+        if (request.name == null && request.filters == null) {
+            throw ApiException(HttpStatusCode.BadRequest, "Saved filter update needs a name or filter state.")
+        }
+        val current = requireSavedTicketFilter(actor, filterId)
+        val name = request.name?.let { requireName(it, "Saved filter name") } ?: current.name
+        requireUniqueSavedFilterName(actor, current.view, current.projectId, name, current.id)
+        val updated = current.copy(
+            name = name,
+            filters = request.filters?.let {
+                normalizeSavedFilterCriteria(actor, current.view, current.projectId, it)
+            } ?: current.filters
+        )
+        data = data.copy(
+            savedTicketFilters = data.savedTicketFilters.map { if (it.id == current.id) updated else it }
+        )
+        saveLocked()
+        updated
+    }
+
+    fun deleteSavedTicketFilter(actor: User, filterId: String) = synchronized(lock) {
+        val current = requireSavedTicketFilter(actor, filterId)
+        data = data.copy(savedTicketFilters = data.savedTicketFilters.filterNot { it.id == current.id })
+        saveLocked()
+    }
+
     fun deleteTicket(actor: User, ticketId: String) = synchronized(lock) {
         requireAdmin(actor)
         val current = requireTicket(actor, ticketId)
@@ -526,6 +628,11 @@ class DataStore(
         data.tickets.firstOrNull { it.id == ticketId && it.organizationId == user.organizationId }
             ?: throw ApiException(HttpStatusCode.NotFound, "Ticket not found.")
 
+    private fun requireSavedTicketFilter(user: User, filterId: String): SavedTicketFilter =
+        data.savedTicketFilters.firstOrNull {
+            it.id == filterId && it.organizationId == user.organizationId && it.ownerId == user.id
+        } ?: throw ApiException(HttpStatusCode.NotFound, "Saved filter not found.")
+
     private fun requireStatus(workflow: Workflow, statusId: String): WorkflowStatus =
         workflow.statuses.firstOrNull { it.id == statusId }
             ?: throw ApiException(HttpStatusCode.NotFound, "Workflow status not found.")
@@ -540,6 +647,120 @@ class DataStore(
     private fun requireUniqueProjectKey(organizationId: String, key: String) {
         if (data.projects.any { it.organizationId == organizationId && it.key == key }) {
             throw ApiException(HttpStatusCode.Conflict, "A project with this key already exists.")
+        }
+    }
+
+    private fun normalizeSavedFilterProjectContext(
+        actor: User,
+        view: SavedTicketFilterView,
+        projectId: String?
+    ): String? =
+        when (view) {
+            SavedTicketFilterView.PROJECT_LIST -> {
+                val projectContext = projectId?.takeIf { it.isNotBlank() }
+                    ?: throw ApiException(HttpStatusCode.BadRequest, "Project list filters need a project.")
+                requireProject(actor, projectContext).id
+            }
+
+            SavedTicketFilterView.MY_TICKETS -> {
+                if (!projectId.isNullOrBlank()) {
+                    throw ApiException(HttpStatusCode.BadRequest, "My Tickets filters do not use a project context.")
+                }
+                null
+            }
+        }
+
+    private fun normalizeSavedFilterCriteria(
+        actor: User,
+        view: SavedTicketFilterView,
+        projectContextId: String?,
+        criteria: SavedTicketFilterCriteria
+    ): SavedTicketFilterCriteria {
+        val query = criteria.q.trim()
+        if (query.length > 200) {
+            throw ApiException(HttpStatusCode.BadRequest, "Saved filter search must be 200 characters or fewer.")
+        }
+        val label = criteria.label.trim().lowercase(Locale.ROOT)
+        if (label.length > 32) {
+            throw ApiException(HttpStatusCode.BadRequest, "Saved filter label must be 32 characters or fewer.")
+        }
+        val sort = normalizeSavedFilterSort(view, criteria.sort)
+        return when (view) {
+            SavedTicketFilterView.PROJECT_LIST -> {
+                val projectId = projectContextId
+                    ?: throw ApiException(HttpStatusCode.BadRequest, "Project list filters need a project.")
+                if (!criteria.projectId.isNullOrBlank()) {
+                    throw ApiException(HttpStatusCode.BadRequest, "Project list filter criteria cannot switch projects.")
+                }
+                if (criteria.statusId.isNotBlank()) {
+                    requireStatus(requireWorkflow(projectId), criteria.statusId)
+                }
+                if (criteria.typeId.isNotBlank()) {
+                    requireTicketTypeForProject(actor, criteria.typeId, projectId)
+                }
+                if (criteria.assigneeId.isNotBlank() && criteria.assigneeId != "unassigned") {
+                    requireAssignee(actor, criteria.assigneeId)
+                }
+                criteria.copy(
+                    projectId = null,
+                    q = query,
+                    statusId = criteria.statusId.trim(),
+                    typeId = criteria.typeId.trim(),
+                    assigneeId = criteria.assigneeId.trim(),
+                    label = label,
+                    sort = sort
+                )
+            }
+
+            SavedTicketFilterView.MY_TICKETS -> {
+                if (criteria.statusId.isNotBlank() || criteria.typeId.isNotBlank() || criteria.assigneeId.isNotBlank()) {
+                    throw ApiException(
+                        HttpStatusCode.BadRequest,
+                        "My Tickets filters only support project, search, priority, label, and sorting."
+                    )
+                }
+                val projectId = criteria.projectId?.takeIf { it.isNotBlank() }?.let { requireProject(actor, it).id }
+                criteria.copy(
+                    projectId = projectId,
+                    q = query,
+                    statusId = "",
+                    typeId = "",
+                    assigneeId = "",
+                    label = label,
+                    sort = sort
+                )
+            }
+        }
+    }
+
+    private fun normalizeSavedFilterSort(view: SavedTicketFilterView, value: String): String {
+        val sort = value.trim().ifBlank { "number" }
+        val supported = when (view) {
+            SavedTicketFilterView.PROJECT_LIST -> setOf("number", "title", "priority", "status", "updated")
+            SavedTicketFilterView.MY_TICKETS -> setOf("number", "title", "priority", "updated")
+        }
+        if (sort !in supported) {
+            throw ApiException(HttpStatusCode.BadRequest, "Saved filter sort is not supported.")
+        }
+        return sort
+    }
+
+    private fun requireUniqueSavedFilterName(
+        actor: User,
+        view: SavedTicketFilterView,
+        projectId: String?,
+        name: String,
+        ignoredId: String?
+    ) {
+        if (data.savedTicketFilters.any {
+                it.id != ignoredId &&
+                    it.organizationId == actor.organizationId &&
+                    it.ownerId == actor.id &&
+                    it.view == view &&
+                    it.projectId == projectId &&
+                    it.name.equals(name, ignoreCase = true)
+            }) {
+            throw ApiException(HttpStatusCode.Conflict, "A saved filter with this name already exists.")
         }
     }
 

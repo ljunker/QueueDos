@@ -5,6 +5,9 @@ import de.ljunker.queuedos.domain.Priority
 import de.ljunker.queuedos.domain.Project
 import de.ljunker.queuedos.domain.PublicUser
 import de.ljunker.queuedos.domain.Role
+import de.ljunker.queuedos.domain.SavedTicketFilter
+import de.ljunker.queuedos.domain.SavedTicketFilterCriteria
+import de.ljunker.queuedos.domain.SavedTicketFilterView
 import de.ljunker.queuedos.domain.Ticket
 import de.ljunker.queuedos.domain.TicketChange
 import de.ljunker.queuedos.domain.TicketComment
@@ -42,6 +45,7 @@ data class BootstrapResponse(
     val tickets: List<Ticket>,
     val comments: List<TicketComment> = emptyList(),
     val ticketChanges: List<TicketChange> = emptyList(),
+    val savedTicketFilters: List<SavedTicketFilter> = emptyList(),
     val priorities: List<Priority> = Priority.entries.toList()
 )
 
@@ -140,4 +144,26 @@ data class CreateTicketCommentRequest(
 data class SaveWorkflowRequest(
     val statuses: List<WorkflowStatus>,
     val transitions: List<WorkflowTransition>
+)
+
+@Serializable
+data class CreateSavedTicketFilterRequest(
+    val name: String,
+    val view: SavedTicketFilterView,
+    val projectId: String? = null,
+    val filters: SavedTicketFilterCriteria = SavedTicketFilterCriteria()
+)
+
+@Serializable
+data class UpdateSavedTicketFilterRequest(
+    val name: String? = null,
+    val filters: SavedTicketFilterCriteria? = null
+)
+
+@Serializable
+data class BulkUpdateTicketsRequest(
+    val ticketIds: List<String>,
+    val assigneeId: String? = null,
+    val clearAssignee: Boolean = false,
+    val priority: Priority? = null
 )

@@ -2,7 +2,18 @@ import { createReducer, on } from '@ngrx/store';
 
 import { BootstrapResponse, Workflow } from '../core/api.models';
 import { QueueActions } from './queue.actions';
-import { cloneWorkflow, defaultFilters, TicketDialogState, TicketFilters, WorkspaceTab } from './queue.models';
+import {
+  cloneWorkflow,
+  defaultFilters,
+  defaultMyTicketsFilters,
+  DetailReturnTab,
+  MyTicketsFilters,
+  savedMyTicketsFilters,
+  savedProjectFilters,
+  TicketDialogState,
+  TicketFilters,
+  WorkspaceTab
+} from './queue.models';
 
 export interface QueueState {
   token: string | null;
@@ -13,8 +24,10 @@ export interface QueueState {
   loginError: string;
   selectedProjectId: string | null;
   activeTab: WorkspaceTab;
+  detailReturnTab: DetailReturnTab;
   detailTicketId: string | null;
   filters: TicketFilters;
+  myTicketsFilters: MyTicketsFilters;
   ticketDialog: TicketDialogState | null;
   workflowDraft: Workflow | null;
   toast: string;
@@ -29,8 +42,10 @@ export const initialState: QueueState = {
   loginError: '',
   selectedProjectId: null,
   activeTab: 'board',
+  detailReturnTab: 'list',
   detailTicketId: null,
   filters: defaultFilters(),
+  myTicketsFilters: defaultMyTicketsFilters(),
   ticketDialog: null,
   workflowDraft: null,
   toast: ''
@@ -95,6 +110,10 @@ export const queueReducer = createReducer(
         ...state.filters,
         ...routeState.filters
       },
+      myTicketsFilters: {
+        ...state.myTicketsFilters,
+        ...routeState.myTicketsFilters
+      },
       workflowDraft:
         selectedProjectId !== state.selectedProjectId ? cloneWorkflow(workflowForProject(state.data, selectedProjectId)) : state.workflowDraft
     };
@@ -114,11 +133,12 @@ export const queueReducer = createReducer(
   on(QueueActions.ticketDetailOpened, (state, { ticketId }) => ({
     ...state,
     activeTab: 'detail',
+    detailReturnTab: state.activeTab === 'detail' ? state.detailReturnTab : state.activeTab,
     detailTicketId: ticketId
   })),
   on(QueueActions.detailClosed, (state) => ({
     ...state,
-    activeTab: 'list',
+    activeTab: state.detailReturnTab,
     detailTicketId: null
   })),
   on(QueueActions.filtersChanged, (state, { filters }) => ({
@@ -129,6 +149,33 @@ export const queueReducer = createReducer(
       ...filters
     }
   })),
+  on(QueueActions.myTicketsFiltersChanged, (state, { filters }) => ({
+    ...state,
+    activeTab: 'my-tickets',
+    myTicketsFilters: {
+      ...state.myTicketsFilters,
+      ...filters
+    }
+  })),
+  on(QueueActions.savedTicketFilterApplied, (state, { filter }) => {
+    if (filter.view === 'PROJECT_LIST') {
+      const selectedProjectId = filter.projectId ?? state.selectedProjectId;
+      return {
+        ...state,
+        selectedProjectId,
+        activeTab: 'list',
+        detailTicketId: null,
+        filters: savedProjectFilters(filter.filters),
+        workflowDraft: cloneWorkflow(workflowForProject(state.data, selectedProjectId))
+      };
+    }
+    return {
+      ...state,
+      activeTab: 'my-tickets',
+      detailTicketId: null,
+      myTicketsFilters: savedMyTicketsFilters(filter.filters)
+    };
+  }),
   on(QueueActions.ticketDialogOpened, (state, dialog) => ({
     ...state,
     ticketDialog: dialog
@@ -141,7 +188,11 @@ export const queueReducer = createReducer(
     ...state,
     ticketDialog: null,
     detailTicketId: focusTicketId ?? state.detailTicketId,
-    activeTab: focusTicketId ? 'detail' : state.activeTab
+    activeTab: focusTicketId ? 'detail' : state.activeTab,
+    detailReturnTab:
+      focusTicketId && state.activeTab !== 'detail'
+        ? state.activeTab
+        : state.detailReturnTab
   })),
   on(QueueActions.mutationFailed, (state, { error }) => ({
     ...state,

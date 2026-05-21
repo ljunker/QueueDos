@@ -5,6 +5,9 @@ import de.ljunker.queuedos.domain.Organization
 import de.ljunker.queuedos.domain.Priority
 import de.ljunker.queuedos.domain.Project
 import de.ljunker.queuedos.domain.Role
+import de.ljunker.queuedos.domain.SavedTicketFilter
+import de.ljunker.queuedos.domain.SavedTicketFilterCriteria
+import de.ljunker.queuedos.domain.SavedTicketFilterView
 import de.ljunker.queuedos.domain.Ticket
 import de.ljunker.queuedos.domain.TicketChange
 import de.ljunker.queuedos.domain.TicketComment
@@ -281,6 +284,23 @@ class PostgreSqlAppDataStorage(
                     createdAt = result.getString("created_at")
                 )
             }
+            val savedTicketFilters = connection.query(
+                """
+                SELECT id, organization_id, owner_id, name, view, project_id, filters
+                FROM queuedos_saved_ticket_filters
+                ORDER BY owner_id, view, name
+                """.trimIndent()
+            ) { result ->
+                SavedTicketFilter(
+                    id = result.getString("id"),
+                    organizationId = result.getString("organization_id"),
+                    ownerId = result.getString("owner_id"),
+                    name = result.getString("name"),
+                    view = SavedTicketFilterView.valueOf(result.getString("view")),
+                    projectId = result.getString("project_id"),
+                    filters = json.decodeFromString<SavedTicketFilterCriteria>(result.getString("filters"))
+                )
+            }
 
             return AppData(
                 organizations = organizations,
@@ -290,7 +310,8 @@ class PostgreSqlAppDataStorage(
                 workflows = workflows,
                 tickets = tickets,
                 comments = comments,
-                ticketChanges = changes
+                ticketChanges = changes,
+                savedTicketFilters = savedTicketFilters
             )
         }
     }
@@ -330,6 +351,7 @@ class PostgreSqlAppDataStorage(
             insertTicketLabels(snapshot.tickets)
             insertTicketComments(snapshot.comments)
             insertTicketChanges(snapshot.ticketChanges)
+            insertSavedTicketFilters(snapshot.savedTicketFilters)
             commit()
         } catch (error: Exception) {
             rollback()
@@ -343,6 +365,7 @@ class PostgreSqlAppDataStorage(
         listOf(
             "queuedos_ticket_changes",
             "queuedos_ticket_comments",
+            "queuedos_saved_ticket_filters",
             "queuedos_ticket_labels",
             "queuedos_tickets",
             "queuedos_workflow_transition_required_fields",
@@ -628,6 +651,27 @@ class PostgreSqlAppDataStorage(
         }
     }
 
+    private fun Connection.insertSavedTicketFilters(filters: List<SavedTicketFilter>) {
+        batch(
+            """
+            INSERT INTO queuedos_saved_ticket_filters
+                (id, organization_id, owner_id, name, view, project_id, filters)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent()
+        ) { statement ->
+            filters.forEach { filter ->
+                statement.setString(1, filter.id)
+                statement.setString(2, filter.organizationId)
+                statement.setString(3, filter.ownerId)
+                statement.setString(4, filter.name)
+                statement.setString(5, filter.view.name)
+                statement.setNullableString(6, filter.projectId)
+                statement.setString(7, json.encodeToString(filter.filters))
+                statement.addBatch()
+            }
+        }
+    }
+
     private fun Connection.loadLegacySnapshot(): AppData? {
         val hasLegacyTable = query("SELECT to_regclass('public.queuedos_state') IS NOT NULL AS exists") { result ->
             result.getBoolean("exists")
@@ -863,6 +907,18 @@ class PostgreSqlAppDataStorage(
             created_at text NOT NULL
         )
         """.trimIndent(),
+        """
+        CREATE TABLE IF NOT EXISTS queuedos_saved_ticket_filters (
+            id text PRIMARY KEY,
+            organization_id text NOT NULL REFERENCES queuedos_organizations(id) ON DELETE CASCADE,
+            owner_id text NOT NULL REFERENCES queuedos_users(id) ON DELETE CASCADE,
+            name text NOT NULL,
+            view text NOT NULL CHECK (view IN ('PROJECT_LIST', 'MY_TICKETS')),
+            project_id text REFERENCES queuedos_projects(id) ON DELETE CASCADE,
+            filters text NOT NULL,
+            UNIQUE (owner_id, view, project_id, name)
+        )
+        """.trimIndent(),
         "ALTER TABLE queuedos_workflow_transitions ALTER COLUMN from_status_id DROP NOT NULL",
         "ALTER TABLE queuedos_workflow_transitions ADD COLUMN IF NOT EXISTS global_transition boolean NOT NULL DEFAULT false",
         "ALTER TABLE queuedos_workflow_transitions ADD COLUMN IF NOT EXISTS allow_backward boolean NOT NULL DEFAULT true",
@@ -877,6 +933,7 @@ class PostgreSqlAppDataStorage(
         "CREATE INDEX IF NOT EXISTS idx_queuedos_tickets_assignee ON queuedos_tickets(assignee_id)",
         "CREATE INDEX IF NOT EXISTS idx_queuedos_ticket_labels_label ON queuedos_ticket_labels(label)",
         "CREATE INDEX IF NOT EXISTS idx_queuedos_ticket_comments_ticket ON queuedos_ticket_comments(ticket_id)",
-        "CREATE INDEX IF NOT EXISTS idx_queuedos_ticket_changes_ticket ON queuedos_ticket_changes(ticket_id)"
+        "CREATE INDEX IF NOT EXISTS idx_queuedos_ticket_changes_ticket ON queuedos_ticket_changes(ticket_id)",
+        "CREATE INDEX IF NOT EXISTS idx_queuedos_saved_ticket_filters_owner ON queuedos_saved_ticket_filters(owner_id)"
     )
 }

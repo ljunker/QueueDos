@@ -1,15 +1,22 @@
 package de.ljunker.queuedos.persistence
 
 import de.ljunker.queuedos.api.ApiException
+import de.ljunker.queuedos.api.BulkUpdateTicketsRequest
+import de.ljunker.queuedos.api.CreateSavedTicketFilterRequest
 import de.ljunker.queuedos.api.CreateTicketCommentRequest
 import de.ljunker.queuedos.api.CreateProjectRequest
 import de.ljunker.queuedos.api.CreateTicketRequest
 import de.ljunker.queuedos.api.LoginRequest
 import de.ljunker.queuedos.api.SaveWorkflowRequest
 import de.ljunker.queuedos.api.TransitionTicketRequest
+import de.ljunker.queuedos.api.UpdateProjectRequest
+import de.ljunker.queuedos.api.UpdateSavedTicketFilterRequest
 import de.ljunker.queuedos.api.UpdateTicketRequest
 import de.ljunker.queuedos.domain.AppData
+import de.ljunker.queuedos.domain.Priority
 import de.ljunker.queuedos.domain.Role
+import de.ljunker.queuedos.domain.SavedTicketFilterCriteria
+import de.ljunker.queuedos.domain.SavedTicketFilterView
 import de.ljunker.queuedos.domain.WorkflowTransition
 import de.ljunker.queuedos.security.AuthTokenCodec
 import de.ljunker.queuedos.security.BCRYPT_PASSWORD_MARKER
@@ -210,6 +217,111 @@ class DataStoreTest {
 
         assertEquals("status-done", moved.statusId)
         assertEquals(HttpStatusCode.Conflict, failure.status)
+    }
+
+    @Test
+    fun savedTicketFiltersArePrivateValidatedAndRenamable() {
+        val store = newStore()
+        val admin = store.userByToken(store.login(LoginRequest("admin@queuedos.local", "admin")).token)!!
+        val member = store.userByToken(store.login(LoginRequest("member@queuedos.local", "member")).token)!!
+        val project = store.bootstrap(admin).projects.first()
+
+        val projectFilter = store.createSavedTicketFilter(
+            admin,
+            CreateSavedTicketFilterRequest(
+                name = "Critical todo",
+                view = SavedTicketFilterView.PROJECT_LIST,
+                projectId = project.id,
+                filters = SavedTicketFilterCriteria(statusId = "status-todo", priority = Priority.CRITICAL)
+            )
+        )
+        val renamed = store.updateSavedTicketFilter(
+            admin,
+            projectFilter.id,
+            UpdateSavedTicketFilterRequest(name = "Critical queue")
+        )
+
+        assertEquals("Critical queue", renamed.name)
+        assertEquals(listOf(renamed), store.bootstrap(admin).savedTicketFilters)
+        assertTrue(store.bootstrap(member).savedTicketFilters.isEmpty())
+
+        val duplicate = assertFailsWith<ApiException> {
+            store.createSavedTicketFilter(
+                admin,
+                CreateSavedTicketFilterRequest(
+                    name = "critical queue",
+                    view = SavedTicketFilterView.PROJECT_LIST,
+                    projectId = project.id
+                )
+            )
+        }
+        val privateFailure = assertFailsWith<ApiException> {
+            store.updateSavedTicketFilter(member, projectFilter.id, UpdateSavedTicketFilterRequest(name = "Stolen"))
+        }
+        val invalidMyTickets = assertFailsWith<ApiException> {
+            store.createSavedTicketFilter(
+                admin,
+                CreateSavedTicketFilterRequest(
+                    name = "Status in mine",
+                    view = SavedTicketFilterView.MY_TICKETS,
+                    filters = SavedTicketFilterCriteria(statusId = "status-todo")
+                )
+            )
+        }
+
+        assertEquals(HttpStatusCode.Conflict, duplicate.status)
+        assertEquals(HttpStatusCode.NotFound, privateFailure.status)
+        assertEquals(HttpStatusCode.BadRequest, invalidMyTickets.status)
+
+        store.deleteSavedTicketFilter(admin, projectFilter.id)
+        assertTrue(store.bootstrap(admin).savedTicketFilters.isEmpty())
+    }
+
+    @Test
+    fun bulkTicketUpdatesValidateBeforeChangingTickets() {
+        val store = newStore()
+        val admin = store.userByToken(store.login(LoginRequest("admin@queuedos.local", "admin")).token)!!
+        val bootstrap = store.bootstrap(admin)
+        val project = bootstrap.projects.first()
+        val ticketIds = bootstrap.tickets.take(2).map { it.id }
+
+        val reassigned = store.bulkUpdateTickets(
+            admin,
+            BulkUpdateTicketsRequest(ticketIds = ticketIds, assigneeId = "user-member", priority = Priority.LOW)
+        )
+        assertTrue(reassigned.all { it.assigneeId == "user-member" && it.priority == Priority.LOW })
+
+        val cleared = store.bulkUpdateTickets(
+            admin,
+            BulkUpdateTicketsRequest(ticketIds = ticketIds, clearAssignee = true)
+        )
+        assertTrue(cleared.all { it.assigneeId == null })
+
+        val emptySelection = assertFailsWith<ApiException> {
+            store.bulkUpdateTickets(admin, BulkUpdateTicketsRequest(ticketIds = emptyList(), priority = Priority.HIGH))
+        }
+        val emptyMutation = assertFailsWith<ApiException> {
+            store.bulkUpdateTickets(admin, BulkUpdateTicketsRequest(ticketIds = ticketIds))
+        }
+        val beforeInvalid = store.bootstrap(admin).tickets.filter { it.id in ticketIds }
+        val invalidAssignee = assertFailsWith<ApiException> {
+            store.bulkUpdateTickets(
+                admin,
+                BulkUpdateTicketsRequest(ticketIds = ticketIds, assigneeId = "user-outside", priority = Priority.CRITICAL)
+            )
+        }
+        assertEquals(beforeInvalid, store.bootstrap(admin).tickets.filter { it.id in ticketIds })
+
+        store.updateProject(admin, project.id, UpdateProjectRequest(archived = true))
+        val archivedFailure = assertFailsWith<ApiException> {
+            store.bulkUpdateTickets(admin, BulkUpdateTicketsRequest(ticketIds = ticketIds, priority = Priority.HIGH))
+        }
+
+        assertEquals(HttpStatusCode.BadRequest, emptySelection.status)
+        assertEquals(HttpStatusCode.BadRequest, emptyMutation.status)
+        assertEquals(HttpStatusCode.NotFound, invalidAssignee.status)
+        assertEquals(HttpStatusCode.Conflict, archivedFailure.status)
+        assertEquals(beforeInvalid, store.bootstrap(admin).tickets.filter { it.id in ticketIds })
     }
 
     private fun newStore(): DataStore {

@@ -392,11 +392,85 @@ tr:hover {
   margin-bottom: 14px;
 }
 
+.filters.my-ticket-filters {
+  grid-template-columns: minmax(220px, 1.6fr) minmax(180px, 1fr) repeat(3, minmax(130px, 1fr));
+}
+
+.saved-filters {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(180px, 1.2fr) repeat(4, auto);
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.bulk-bar {
+  display: grid;
+  grid-template-columns: auto minmax(170px, 1fr) auto auto minmax(150px, 0.8fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.select-column {
+  width: 44px;
+}
+
+.select-column input {
+  width: 18px;
+  min-height: 18px;
+  padding: 0;
+  vertical-align: middle;
+}
+
 .table-wrap {
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
+}
+
+.dashboard {
+  display: grid;
+  gap: 22px;
+}
+
+.dashboard-band {
+  display: grid;
+  gap: 12px;
+}
+
+.dashboard-band h3 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.metric {
+  min-height: 74px;
+  display: grid;
+  justify-items: start;
+  align-content: center;
+  gap: 4px;
+  padding: 12px;
+  background: var(--surface);
+}
+
+.metric span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.metric strong {
+  font-size: 24px;
+  line-height: 1;
 }
 
 .admin-grid {
@@ -649,6 +723,9 @@ tr:hover {
   }
 
   .filters,
+  .filters.my-ticket-filters,
+  .saved-filters,
+  .bulk-bar,
   .admin-grid,
   .workflow-editor,
   .detail-grid {

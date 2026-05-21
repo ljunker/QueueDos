@@ -63,6 +63,10 @@ internal fun Application.configureRoutes(store: DataStore) {
             call.respond(HttpStatusCode.Created, store.createTicket(call.requireUser(store), call.receive()))
         }
 
+        post("/api/tickets/bulk-update") {
+            call.respond(store.bulkUpdateTickets(call.requireUser(store), call.receive()))
+        }
+
         put("/api/tickets/{id}") {
             call.respond(store.updateTicket(call.requireUser(store), call.pathId(), call.receive()))
         }
@@ -111,6 +115,19 @@ internal fun Application.configureRoutes(store: DataStore) {
 
         put("/api/projects/{id}/workflow") {
             call.respond(store.saveWorkflow(call.requireUser(store), call.pathId(), call.receive()))
+        }
+
+        post("/api/saved-ticket-filters") {
+            call.respond(HttpStatusCode.Created, store.createSavedTicketFilter(call.requireUser(store), call.receive()))
+        }
+
+        put("/api/saved-ticket-filters/{id}") {
+            call.respond(store.updateSavedTicketFilter(call.requireUser(store), call.pathId(), call.receive()))
+        }
+
+        delete("/api/saved-ticket-filters/{id}") {
+            store.deleteSavedTicketFilter(call.requireUser(store), call.pathId())
+            call.respond(HttpStatusCode.NoContent)
         }
 
         get("/{assetPath...}") {

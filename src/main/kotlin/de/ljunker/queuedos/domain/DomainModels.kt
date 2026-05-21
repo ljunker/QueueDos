@@ -146,6 +146,35 @@ data class TicketChange(
 )
 
 @Serializable
+enum class SavedTicketFilterView {
+    PROJECT_LIST,
+    MY_TICKETS
+}
+
+@Serializable
+data class SavedTicketFilterCriteria(
+    val projectId: String? = null,
+    val q: String = "",
+    val statusId: String = "",
+    val typeId: String = "",
+    val priority: Priority? = null,
+    val assigneeId: String = "",
+    val label: String = "",
+    val sort: String = "number"
+)
+
+@Serializable
+data class SavedTicketFilter(
+    val id: String,
+    val organizationId: String,
+    val ownerId: String,
+    val name: String,
+    val view: SavedTicketFilterView,
+    val projectId: String? = null,
+    val filters: SavedTicketFilterCriteria = SavedTicketFilterCriteria()
+)
+
+@Serializable
 data class AppData(
     val organizations: List<Organization> = emptyList(),
     val users: List<User> = emptyList(),
@@ -154,5 +183,6 @@ data class AppData(
     val workflows: List<Workflow> = emptyList(),
     val tickets: List<Ticket> = emptyList(),
     val comments: List<TicketComment> = emptyList(),
-    val ticketChanges: List<TicketChange> = emptyList()
+    val ticketChanges: List<TicketChange> = emptyList(),
+    val savedTicketFilters: List<SavedTicketFilter> = emptyList()
 )

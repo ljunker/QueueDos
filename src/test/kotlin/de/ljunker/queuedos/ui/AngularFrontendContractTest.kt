@@ -61,6 +61,27 @@ class AngularFrontendContractTest {
     }
 
     @Test
+    fun ticketWorkViewsArePresent() {
+        val workspace = projectFile("frontend/src/app/pages/workspace/workspace-page.component.ts")
+        val host = projectFile("frontend/src/app/shared/organisms/workspace-tab-host.component.ts")
+        val myTickets = projectFile("frontend/src/app/shared/organisms/my-tickets-view.component.ts")
+        val dashboard = projectFile("frontend/src/app/shared/organisms/project-dashboard-view.component.ts")
+        val table = projectFile("frontend/src/app/shared/organisms/ticket-table.component.ts")
+        val filters = projectFile("frontend/src/app/shared/molecules/saved-ticket-filters.component.ts")
+        val selectors = projectFile("frontend/src/app/state/queue.selectors.ts")
+
+        assertContains(host, "@case ('dashboard')")
+        assertContains(host, "@case ('my-tickets')")
+        assertContains(myTickets, "qd-my-ticket-filters")
+        assertContains(dashboard, "drilldown")
+        assertContains(table, "bulkUpdateRequested")
+        assertContains(filters, "Save current")
+        assertContains(workspace, "savedTicketFilterCreateRequested")
+        assertContains(selectors, "selectMyTickets")
+        assertContains(selectors, "selectSelectedTicketWorkflow")
+    }
+
+    @Test
     fun ktorServesAngularSpaAssets() {
         val routes = projectFile("src/main/kotlin/de/ljunker/queuedos/api/ApiRoutes.kt")
 

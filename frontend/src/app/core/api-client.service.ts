@@ -3,6 +3,8 @@ import { Injectable, inject } from '@angular/core';
 
 import {
   BootstrapResponse,
+  BulkUpdateTicketsRequest,
+  CreateSavedTicketFilterRequest,
   CreateTicketCommentRequest,
   CreateTicketRequest,
   CreateProjectRequest,
@@ -17,6 +19,7 @@ import {
   TicketType,
   TicketDetailResponse,
   TransitionTicketRequest,
+  UpdateSavedTicketFilterRequest,
   UpdateUserRequest,
   UpdateTicketRequest
 } from './api.models';
@@ -49,6 +52,10 @@ export class ApiClientService {
     return this.http.post<Ticket>(`/api/tickets/${id}/transition`, request);
   }
 
+  bulkUpdateTickets(request: BulkUpdateTicketsRequest) {
+    return this.http.post<Ticket[]>('/api/tickets/bulk-update', request);
+  }
+
   addComment(id: string, request: CreateTicketCommentRequest) {
     return this.http.post<TicketComment>(`/api/tickets/${id}/comments`, request);
   }
@@ -79,5 +86,17 @@ export class ApiClientService {
 
   saveWorkflow(projectId: string, request: SaveWorkflowRequest) {
     return this.http.put(`/api/projects/${projectId}/workflow`, request);
+  }
+
+  createSavedTicketFilter(request: CreateSavedTicketFilterRequest) {
+    return this.http.post('/api/saved-ticket-filters', request);
+  }
+
+  updateSavedTicketFilter(id: string, request: UpdateSavedTicketFilterRequest) {
+    return this.http.put(`/api/saved-ticket-filters/${id}`, request);
+  }
+
+  deleteSavedTicketFilter(id: string) {
+    return this.http.delete<void>(`/api/saved-ticket-filters/${id}`);
   }
 }

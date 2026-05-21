@@ -3,7 +3,13 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap } from '@angular/router';
 import { Store } from '@ngrx/store';
 
-import { Priority, Ticket } from '../../core/api.models';
+import {
+  CreateSavedTicketFilterRequest,
+  Priority,
+  SavedTicketFilterCriteria,
+  SavedTicketFilterView,
+  Ticket
+} from '../../core/api.models';
 import { SidebarComponent } from '../../shared/organisms/sidebar.component';
 import { TicketDialogComponent } from '../../shared/organisms/ticket-dialog.component';
 import { ToastComponent } from '../../shared/atoms/toast.component';
@@ -16,12 +22,19 @@ import {
   selectCurrentUser,
   selectData,
   selectDialogTicket,
+  selectDialogProject,
+  selectDialogTypes,
+  selectDialogWorkflow,
   selectError,
   selectFilters,
   selectIsAdmin,
   selectLoading,
+  selectMyTickets,
+  selectMyTicketsFilters,
+  selectMyTicketsSavedFilters,
   selectOrganizations,
   selectPriorities,
+  selectProjectSavedTicketFilters,
   selectProjectTickets,
   selectProjectTypes,
   selectProjects,
@@ -30,6 +43,8 @@ import {
   selectSelectedTicket,
   selectSelectedTicketChanges,
   selectSelectedTicketComments,
+  selectSelectedTicketTypes,
+  selectSelectedTicketWorkflow,
   selectSelectedWorkflow,
   selectSortedStatuses,
   selectTicketDialog,
@@ -38,7 +53,14 @@ import {
   selectVisibleTickets,
   selectWorkflowDraft
 } from '../../state/queue.selectors';
-import { RouteWorkspaceState, TicketFilters, TicketSort, WorkspaceTab } from '../../state/queue.models';
+import {
+  myTicketsSort,
+  MyTicketsFilters,
+  RouteWorkspaceState,
+  TicketFilters,
+  ticketSort,
+  WorkspaceTab
+} from '../../state/queue.models';
 
 @Component({
   selector: 'qd-workspace-page',
@@ -82,17 +104,24 @@ import { RouteWorkspaceState, TicketFilters, TicketSort, WorkspaceTab } from '..
             [statuses]="statuses()"
             [projectTickets]="projectTickets()"
             [visibleTickets]="visibleTickets()"
+            [myTickets]="myTickets()"
             [projectTypes]="projectTypes()"
             [priorities]="priorities()"
             [filters]="filters()"
+            [myTicketsFilters]="myTicketsFilters()"
             [selectedTicket]="selectedTicket()"
+            [selectedTicketWorkflow]="selectedTicketWorkflow()"
+            [selectedTicketTypes]="selectedTicketTypes()"
             [selectedTicketComments]="selectedTicketComments()"
             [selectedTicketChanges]="selectedTicketChanges()"
             [workflowDraft]="workflowDraft()"
+            [projectSavedFilters]="projectSavedFilters()"
+            [myTicketsSavedFilters]="myTicketsSavedFilters()"
             (ticketOpened)="openTicket($event)"
             (ticketTransitioned)="transitionTicket($event)"
             (transitionDenied)="showToast('This workflow transition is not allowed.')"
             (filtersChanged)="changeFilters($event)"
+            (myTicketsFiltersChanged)="changeMyTicketsFilters($event)"
             (detailClosed)="store.dispatch(detailClosed())"
             (editRequested)="openEditDialog($event)"
             (commentSubmitted)="store.dispatch(commentCreateRequested($event))"
@@ -108,15 +137,20 @@ import { RouteWorkspaceState, TicketFilters, TicketSort, WorkspaceTab } from '..
             (transitionAdded)="store.dispatch(workflowTransitionAdded())"
             (transitionPatched)="store.dispatch(workflowTransitionPatched($event))"
             (transitionRemoved)="store.dispatch(workflowTransitionRemoved({ index: $event }))"
-            (workflowSaved)="saveWorkflow()" />
+            (workflowSaved)="saveWorkflow()"
+            (savedFilterCreated)="createSavedFilter($event)"
+            (savedFilterApplied)="store.dispatch(savedTicketFilterApplied({ filter: $event }))"
+            (savedFilterRenamed)="renameSavedFilter($event)"
+            (savedFilterDeleted)="store.dispatch(savedTicketFilterDeleteRequested({ filterId: $event }))"
+            (bulkUpdateRequested)="store.dispatch(ticketsBulkUpdateRequested({ request: $event }))" />
         </section>
 
         <qd-ticket-dialog
           [open]="Boolean(ticketDialog())"
           [ticket]="dialogTicket()"
-          [project]="selectedProject()"
-          [workflow]="workflow()"
-          [types]="projectTypes()"
+          [project]="dialogProject()"
+          [workflow]="dialogWorkflow()"
+          [types]="dialogTypes()"
           [priorities]="priorities()"
           [users]="activeUsers()"
           [isAdmin]="isAdmin()"
@@ -152,12 +186,21 @@ export class WorkspacePageComponent {
   protected readonly projectTypes = this.store.selectSignal(selectProjectTypes);
   protected readonly priorities = this.store.selectSignal(selectPriorities);
   protected readonly visibleTickets = this.store.selectSignal(selectVisibleTickets);
+  protected readonly myTickets = this.store.selectSignal(selectMyTickets);
   protected readonly filters = this.store.selectSignal(selectFilters);
+  protected readonly myTicketsFilters = this.store.selectSignal(selectMyTicketsFilters);
+  protected readonly projectSavedFilters = this.store.selectSignal(selectProjectSavedTicketFilters);
+  protected readonly myTicketsSavedFilters = this.store.selectSignal(selectMyTicketsSavedFilters);
   protected readonly selectedTicket = this.store.selectSignal(selectSelectedTicket);
+  protected readonly selectedTicketWorkflow = this.store.selectSignal(selectSelectedTicketWorkflow);
+  protected readonly selectedTicketTypes = this.store.selectSignal(selectSelectedTicketTypes);
   protected readonly selectedTicketComments = this.store.selectSignal(selectSelectedTicketComments);
   protected readonly selectedTicketChanges = this.store.selectSignal(selectSelectedTicketChanges);
   protected readonly ticketDialog = this.store.selectSignal(selectTicketDialog);
   protected readonly dialogTicket = this.store.selectSignal(selectDialogTicket);
+  protected readonly dialogProject = this.store.selectSignal(selectDialogProject);
+  protected readonly dialogWorkflow = this.store.selectSignal(selectDialogWorkflow);
+  protected readonly dialogTypes = this.store.selectSignal(selectDialogTypes);
   protected readonly workflowDraft = this.store.selectSignal(selectWorkflowDraft);
   protected readonly toast = this.store.selectSignal(selectToast);
 
@@ -178,6 +221,9 @@ export class WorkspacePageComponent {
   protected readonly ticketDialogClosed = QueueActions.ticketDialogClosed;
   protected readonly ticketDialogSaved = QueueActions.ticketDialogSaved;
   protected readonly ticketDeleteRequested = QueueActions.ticketDeleteRequested;
+  protected readonly ticketsBulkUpdateRequested = QueueActions.ticketsBulkUpdateRequested;
+  protected readonly savedTicketFilterApplied = QueueActions.savedTicketFilterApplied;
+  protected readonly savedTicketFilterDeleteRequested = QueueActions.savedTicketFilterDeleteRequested;
   protected readonly toastCleared = QueueActions.toastCleared;
   protected readonly Boolean = Boolean;
 
@@ -215,6 +261,24 @@ export class WorkspacePageComponent {
     this.store.dispatch(QueueActions.filtersChanged({ filters }));
   }
 
+  protected changeMyTicketsFilters(filters: Partial<MyTicketsFilters>): void {
+    this.store.dispatch(QueueActions.myTicketsFiltersChanged({ filters }));
+  }
+
+  protected createSavedFilter(event: { view: SavedTicketFilterView; name: string }): void {
+    const request = this.savedFilterRequest(event.view, event.name);
+    if (request) this.store.dispatch(QueueActions.savedTicketFilterCreateRequested({ request }));
+  }
+
+  protected renameSavedFilter(event: { filterId: string; name: string }): void {
+    this.store.dispatch(
+      QueueActions.savedTicketFilterUpdateRequested({
+        filterId: event.filterId,
+        request: { name: event.name }
+      })
+    );
+  }
+
   protected showToast(message: string): void {
     this.store.dispatch(QueueActions.toastShown({ message }));
   }
@@ -233,6 +297,25 @@ export class WorkspacePageComponent {
       })
     );
   }
+
+  private savedFilterRequest(view: SavedTicketFilterView, name: string): CreateSavedTicketFilterRequest | null {
+    if (view === 'PROJECT_LIST') {
+      const project = this.selectedProject();
+      if (!project) return null;
+      return {
+        name,
+        view,
+        projectId: project.id,
+        filters: projectFilterCriteria(this.filters())
+      };
+    }
+    return {
+      name,
+      view,
+      projectId: null,
+      filters: myTicketsFilterCriteria(this.myTicketsFilters())
+    };
+  }
 }
 
 function routeStateFromParams(params: ParamMap): RouteWorkspaceState {
@@ -249,19 +332,53 @@ function routeStateFromParams(params: ParamMap): RouteWorkspaceState {
       priority: priorityFromParam(params.get('priority')),
       assigneeId: params.get('assigneeId') ?? '',
       label: params.get('label') ?? '',
-      sort: sortFromParam(params.get('sort'))
+      sort: ticketSort(params.get('sort'))
+    },
+    myTicketsFilters: {
+      projectId: params.get('myProjectId') ?? '',
+      q: params.get('myQ') ?? '',
+      priority: priorityFromParam(params.get('myPriority')),
+      label: params.get('myLabel') ?? '',
+      sort: myTicketsSort(params.get('mySort'))
     }
   };
 }
 
 function isWorkspaceTab(value: string | null): value is WorkspaceTab {
-  return value === 'board' || value === 'list' || value === 'detail' || value === 'admin';
+  return value === 'board' ||
+    value === 'dashboard' ||
+    value === 'list' ||
+    value === 'my-tickets' ||
+    value === 'detail' ||
+    value === 'admin';
 }
 
 function priorityFromParam(value: string | null): Priority | '' {
   return value === 'LOW' || value === 'MEDIUM' || value === 'HIGH' || value === 'CRITICAL' ? value : '';
 }
 
-function sortFromParam(value: string | null): TicketSort {
-  return value === 'title' || value === 'priority' || value === 'status' || value === 'updated' ? value : 'number';
+function projectFilterCriteria(filters: TicketFilters): SavedTicketFilterCriteria {
+  return {
+    projectId: null,
+    q: filters.q,
+    statusId: filters.statusId,
+    typeId: filters.typeId,
+    priority: filters.priority || null,
+    assigneeId: filters.assigneeId,
+    label: filters.label,
+    sort: filters.sort
+  };
+}
+
+function myTicketsFilterCriteria(filters: MyTicketsFilters): SavedTicketFilterCriteria {
+  return {
+    projectId: filters.projectId || null,
+    q: filters.q,
+    statusId: '',
+    typeId: '',
+    priority: filters.priority || null,
+    assigneeId: '',
+    label: filters.label,
+    sort: filters.sort
+  };
 }

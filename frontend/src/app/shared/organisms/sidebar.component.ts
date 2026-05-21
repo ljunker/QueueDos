@@ -29,7 +29,9 @@ import { WorkspaceTab } from '../../state/queue.models';
 
       <nav class="tabs" aria-label="Primary">
         <button type="button" class="tab" [class.active]="activeTab() === 'board'" (click)="tabSelected.emit('board')">Board</button>
+        <button type="button" class="tab" [class.active]="activeTab() === 'dashboard'" (click)="tabSelected.emit('dashboard')">Dashboard</button>
         <button type="button" class="tab" [class.active]="activeTab() === 'list'" (click)="tabSelected.emit('list')">List</button>
+        <button type="button" class="tab" [class.active]="activeTab() === 'my-tickets'" (click)="tabSelected.emit('my-tickets')">My Tickets</button>
         @if (isAdmin()) {
           <button type="button" class="tab" [class.active]="activeTab() === 'admin'" (click)="tabSelected.emit('admin')">Admin</button>
         }

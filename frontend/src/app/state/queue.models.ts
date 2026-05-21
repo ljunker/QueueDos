@@ -1,14 +1,17 @@
 import {
   CreateTicketRequest,
   Priority,
+  SavedTicketFilterCriteria,
   UpdateTicketRequest,
   Workflow,
   WorkflowStatus,
   WorkflowTransition
 } from '../core/api.models';
 
-export type WorkspaceTab = 'board' | 'list' | 'detail' | 'admin';
+export type WorkspaceTab = 'board' | 'dashboard' | 'list' | 'my-tickets' | 'detail' | 'admin';
+export type DetailReturnTab = Exclude<WorkspaceTab, 'detail'>;
 export type TicketSort = 'number' | 'title' | 'priority' | 'status' | 'updated';
+export type MyTicketsSort = Exclude<TicketSort, 'status'>;
 
 export interface TicketFilters {
   q: string;
@@ -20,11 +23,20 @@ export interface TicketFilters {
   sort: TicketSort;
 }
 
+export interface MyTicketsFilters {
+  projectId: string;
+  q: string;
+  priority: Priority | '';
+  label: string;
+  sort: MyTicketsSort;
+}
+
 export interface RouteWorkspaceState {
   activeTab?: WorkspaceTab;
   selectedProjectId?: string;
   detailTicketId?: string | null;
   filters?: Partial<TicketFilters>;
+  myTicketsFilters?: Partial<MyTicketsFilters>;
 }
 
 export interface TicketDialogState {
@@ -62,6 +74,46 @@ export function defaultFilters(): TicketFilters {
     label: '',
     sort: 'number'
   };
+}
+
+export function defaultMyTicketsFilters(): MyTicketsFilters {
+  return {
+    projectId: '',
+    q: '',
+    priority: '',
+    label: '',
+    sort: 'number'
+  };
+}
+
+export function savedProjectFilters(criteria: SavedTicketFilterCriteria): TicketFilters {
+  return {
+    q: criteria.q,
+    statusId: criteria.statusId,
+    typeId: criteria.typeId,
+    priority: criteria.priority ?? '',
+    assigneeId: criteria.assigneeId,
+    label: criteria.label,
+    sort: ticketSort(criteria.sort)
+  };
+}
+
+export function savedMyTicketsFilters(criteria: SavedTicketFilterCriteria): MyTicketsFilters {
+  return {
+    projectId: criteria.projectId ?? '',
+    q: criteria.q,
+    priority: criteria.priority ?? '',
+    label: criteria.label,
+    sort: myTicketsSort(criteria.sort)
+  };
+}
+
+export function ticketSort(value: string | null | undefined): TicketSort {
+  return value === 'title' || value === 'priority' || value === 'status' || value === 'updated' ? value : 'number';
+}
+
+export function myTicketsSort(value: string | null | undefined): MyTicketsSort {
+  return value === 'title' || value === 'priority' || value === 'updated' ? value : 'number';
 }
 
 export function cloneWorkflow(workflow: Workflow | null | undefined): Workflow | null {

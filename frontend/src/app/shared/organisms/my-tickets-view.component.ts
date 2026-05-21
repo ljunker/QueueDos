@@ -3,30 +3,28 @@ import { ChangeDetectionStrategy, Component, input, output } from '@angular/core
 import {
   BulkUpdateTicketsRequest,
   Priority,
+  Project,
   PublicUser,
   SavedTicketFilter,
   Ticket,
   TicketType,
-  Workflow,
-  WorkflowStatus
+  Workflow
 } from '../../core/api.models';
-import { TicketFilters } from '../../state/queue.models';
+import { MyTicketsFilters } from '../../state/queue.models';
+import { MyTicketFiltersComponent } from '../molecules/my-ticket-filters.component';
 import { SavedTicketFiltersComponent } from '../molecules/saved-ticket-filters.component';
-import { TicketFiltersComponent } from '../molecules/ticket-filters.component';
 import { TicketTableComponent } from './ticket-table.component';
 
 @Component({
-  selector: 'qd-ticket-list-view',
+  selector: 'qd-my-tickets-view',
   standalone: true,
-  imports: [SavedTicketFiltersComponent, TicketFiltersComponent, TicketTableComponent],
+  imports: [MyTicketFiltersComponent, SavedTicketFiltersComponent, TicketTableComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <qd-ticket-filters
+    <qd-my-ticket-filters
       [filters]="filters()"
-      [statuses]="statuses()"
-      [types]="types()"
+      [projects]="projects()"
       [priorities]="priorities()"
-      [users]="users()"
       (filtersChanged)="filtersChanged.emit($event)" />
 
     <qd-saved-ticket-filters
@@ -38,31 +36,33 @@ import { TicketTableComponent } from './ticket-table.component';
 
     <qd-ticket-table
       [tickets]="tickets()"
+      [projects]="projects()"
       [types]="types()"
-      [workflows]="workflow() ? [workflow()!] : []"
+      [workflows]="workflows()"
       [priorities]="priorities()"
-      [activeUsers]="users()"
-      [allUsers]="allUsers()"
+      [activeUsers]="activeUsers()"
+      [allUsers]="users()"
+      [showProject]="true"
       (ticketOpened)="ticketOpened.emit($event)"
       (bulkUpdateRequested)="bulkUpdateRequested.emit($event)" />
   `
 })
-export class TicketListViewComponent {
+export class MyTicketsViewComponent {
   readonly tickets = input<Ticket[]>([]);
-  readonly filters = input.required<TicketFilters>();
-  readonly statuses = input<WorkflowStatus[]>([]);
-  readonly workflow = input<Workflow | null>(null);
+  readonly filters = input.required<MyTicketsFilters>();
+  readonly projects = input<Project[]>([]);
   readonly types = input<TicketType[]>([]);
+  readonly workflows = input<Workflow[]>([]);
   readonly priorities = input<Priority[]>([]);
+  readonly activeUsers = input<PublicUser[]>([]);
   readonly users = input<PublicUser[]>([]);
-  readonly allUsers = input<PublicUser[]>([]);
   readonly savedFilters = input<SavedTicketFilter[]>([]);
 
-  readonly filtersChanged = output<Partial<TicketFilters>>();
-  readonly ticketOpened = output<string>();
+  readonly filtersChanged = output<Partial<MyTicketsFilters>>();
   readonly savedFilterCreated = output<string>();
   readonly savedFilterApplied = output<SavedTicketFilter>();
   readonly savedFilterRenamed = output<{ filterId: string; name: string }>();
   readonly savedFilterDeleted = output<string>();
+  readonly ticketOpened = output<string>();
   readonly bulkUpdateRequested = output<BulkUpdateTicketsRequest>();
 }

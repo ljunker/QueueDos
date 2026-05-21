@@ -13,7 +13,7 @@ import {
   WorkflowStatus
 } from '../core/api.models';
 import { QueueState } from './queue.reducer';
-import { TicketFilters } from './queue.models';
+import { MyTicketsFilters, TicketFilters } from './queue.models';
 
 export const selectQueueState = createFeatureSelector<QueueState>('queue');
 
@@ -25,6 +25,7 @@ export const selectError = createSelector(selectQueueState, (state) => state.err
 export const selectLoginError = createSelector(selectQueueState, (state) => state.loginError);
 export const selectActiveTab = createSelector(selectQueueState, (state) => state.activeTab);
 export const selectFilters = createSelector(selectQueueState, (state) => state.filters);
+export const selectMyTicketsFilters = createSelector(selectQueueState, (state) => state.myTicketsFilters);
 export const selectSelectedProjectId = createSelector(selectQueueState, (state) => state.selectedProjectId);
 export const selectDetailTicketId = createSelector(selectQueueState, (state) => state.detailTicketId);
 export const selectTicketDialog = createSelector(selectQueueState, (state) => state.ticketDialog);
@@ -39,6 +40,7 @@ export const selectUsers = createSelector(selectData, (data) => data?.users ?? [
 export const selectActiveUsers = createSelector(selectUsers, (users) => users.filter((user) => user.active));
 export const selectTicketTypes = createSelector(selectData, (data) => data?.ticketTypes ?? []);
 export const selectPriorities = createSelector(selectData, (data) => data?.priorities ?? []);
+export const selectSavedTicketFilters = createSelector(selectData, (data) => data?.savedTicketFilters ?? []);
 
 export const selectSelectedProject = createSelector(
   selectProjects,
@@ -66,16 +68,10 @@ export const selectProjectTypes = createSelector(
   (types, projectId) => types.filter((type) => type.projectId === projectId)
 );
 
-export const selectSelectedTicket = createSelector(
-  selectProjectTickets,
-  selectDetailTicketId,
-  (tickets, ticketId) => tickets.find((ticket) => ticket.id === ticketId) ?? null
-);
-
 export const selectDialogTicket = createSelector(
-  selectProjectTickets,
+  selectData,
   selectTicketDialog,
-  (tickets, dialog) => (dialog?.ticketId ? tickets.find((ticket) => ticket.id === dialog.ticketId) ?? null : null)
+  (data, dialog) => (dialog?.ticketId ? data?.tickets.find((ticket) => ticket.id === dialog.ticketId) ?? null : null)
 );
 
 export const selectVisibleTickets = createSelector(
@@ -83,6 +79,22 @@ export const selectVisibleTickets = createSelector(
   selectFilters,
   selectSelectedWorkflow,
   (tickets, filters, workflow) => sortTickets(filterTickets(tickets, filters), filters.sort, workflow)
+);
+
+export const selectMyTickets = createSelector(
+  selectData,
+  selectCurrentUser,
+  selectMyTicketsFilters,
+  selectProjects,
+  (data, user, filters, projects) =>
+    sortMyTickets(
+      filterMyTickets(
+        data?.tickets.filter((ticket) => ticket.assigneeId === user?.id) ?? [],
+        filters
+      ),
+      filters.sort,
+      projects
+    )
 );
 
 export const selectSelectedTicketComments = createSelector(
@@ -102,7 +114,8 @@ export const selectUrlQueryParams = createSelector(
   selectSelectedProjectId,
   selectDetailTicketId,
   selectFilters,
-  (activeTab, projectId, ticketId, filters) => {
+  selectMyTicketsFilters,
+  (activeTab, projectId, ticketId, filters, myTicketsFilters) => {
     const queryParams: Record<string, string> = {};
     if (activeTab !== 'board') queryParams['tab'] = activeTab;
     if (projectId) queryParams['projectId'] = projectId;
@@ -114,8 +127,62 @@ export const selectUrlQueryParams = createSelector(
     if (filters.assigneeId) queryParams['assigneeId'] = filters.assigneeId;
     if (filters.label) queryParams['label'] = filters.label;
     if (filters.sort !== 'number') queryParams['sort'] = filters.sort;
+    if (myTicketsFilters.projectId) queryParams['myProjectId'] = myTicketsFilters.projectId;
+    if (myTicketsFilters.q) queryParams['myQ'] = myTicketsFilters.q;
+    if (myTicketsFilters.priority) queryParams['myPriority'] = myTicketsFilters.priority;
+    if (myTicketsFilters.label) queryParams['myLabel'] = myTicketsFilters.label;
+    if (myTicketsFilters.sort !== 'number') queryParams['mySort'] = myTicketsFilters.sort;
     return queryParams;
   }
+);
+
+export const selectProjectSavedTicketFilters = createSelector(
+  selectSavedTicketFilters,
+  selectSelectedProjectId,
+  (filters, projectId) => filters.filter((filter) => filter.view === 'PROJECT_LIST' && filter.projectId === projectId)
+);
+
+export const selectMyTicketsSavedFilters = createSelector(
+  selectSavedTicketFilters,
+  (filters) => filters.filter((filter) => filter.view === 'MY_TICKETS')
+);
+
+export const selectSelectedTicket = createSelector(
+  selectData,
+  selectDetailTicketId,
+  (data, ticketId) => data?.tickets.find((ticket) => ticket.id === ticketId) ?? null
+);
+
+export const selectSelectedTicketWorkflow = createSelector(
+  selectData,
+  selectSelectedTicket,
+  (data, ticket) => data?.workflows.find((workflow) => workflow.projectId === ticket?.projectId) ?? null
+);
+
+export const selectSelectedTicketTypes = createSelector(
+  selectTicketTypes,
+  selectSelectedTicket,
+  (types, ticket) => types.filter((type) => type.projectId === ticket?.projectId)
+);
+
+export const selectDialogProject = createSelector(
+  selectProjects,
+  selectDialogTicket,
+  selectSelectedProject,
+  (projects, ticket, selectedProject) =>
+    ticket ? projects.find((project) => project.id === ticket.projectId) ?? null : selectedProject
+);
+
+export const selectDialogWorkflow = createSelector(
+  selectData,
+  selectDialogProject,
+  (data, project) => data?.workflows.find((workflow) => workflow.projectId === project?.id) ?? null
+);
+
+export const selectDialogTypes = createSelector(
+  selectTicketTypes,
+  selectDialogProject,
+  (types, project) => types.filter((type) => type.projectId === project?.id)
 );
 
 export function typeById(types: TicketType[], typeId: string): TicketType | null {
@@ -176,6 +243,35 @@ function sortTickets(tickets: Ticket[], sort: TicketFilters['sort'], workflow: W
   if (sort === 'status') return copy.sort((left, right) => statusRank(workflow, left.statusId) - statusRank(workflow, right.statusId));
   if (sort === 'updated') return copy.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
   return copy.sort((left, right) => left.number - right.number);
+}
+
+function filterMyTickets(tickets: Ticket[], filters: MyTicketsFilters): Ticket[] {
+  const query = filters.q.trim().toLowerCase();
+  const label = filters.label.trim().toLowerCase();
+  return tickets.filter((ticket) => {
+    const searchable = `${ticket.key} ${ticket.title} ${ticket.description} ${ticket.labels.join(' ')}`.toLowerCase();
+    return (
+      (!filters.projectId || ticket.projectId === filters.projectId) &&
+      (!query || searchable.includes(query)) &&
+      (!filters.priority || ticket.priority === filters.priority) &&
+      (!label || ticket.labels.some((ticketLabel) => ticketLabel.toLowerCase() === label))
+    );
+  });
+}
+
+function sortMyTickets(tickets: Ticket[], sort: MyTicketsFilters['sort'], projects: Project[]): Ticket[] {
+  const copy = [...tickets];
+  if (sort === 'title') return copy.sort((left, right) => left.title.localeCompare(right.title));
+  if (sort === 'priority') return copy.sort((left, right) => priorityRank(right.priority) - priorityRank(left.priority));
+  if (sort === 'updated') return copy.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  return copy.sort((left, right) => {
+    const projectCompare = projectKey(projects, left.projectId).localeCompare(projectKey(projects, right.projectId));
+    return projectCompare || left.number - right.number;
+  });
+}
+
+function projectKey(projects: Project[], projectId: string): string {
+  return projects.find((project) => project.id === projectId)?.key ?? '';
 }
 
 function priorityRank(priority: Priority): number {

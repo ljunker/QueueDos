@@ -2,6 +2,8 @@ import { createActionGroup, emptyProps, props } from '@ngrx/store';
 
 import {
   BootstrapResponse,
+  BulkUpdateTicketsRequest,
+  CreateSavedTicketFilterRequest,
   CreateProjectRequest,
   CreateTicketCommentRequest,
   CreateTicketRequest,
@@ -11,8 +13,10 @@ import {
   LoginResponse,
   Project,
   PublicUser,
+  SavedTicketFilter,
   SaveWorkflowRequest,
   Ticket,
+  UpdateSavedTicketFilterRequest,
   UpdateUserRequest
 } from '../core/api.models';
 import {
@@ -20,6 +24,7 @@ import {
   TicketDialogSave,
   TicketDialogState,
   TicketFilters,
+  MyTicketsFilters,
   UpdateTicketWithTransition,
   WorkflowStatusPatch,
   WorkflowTransitionPatch,
@@ -46,6 +51,8 @@ export const QueueActions = createActionGroup({
     'Ticket Detail Opened': props<{ ticketId: string }>(),
     'Detail Closed': emptyProps(),
     'Filters Changed': props<{ filters: Partial<TicketFilters> }>(),
+    'My Tickets Filters Changed': props<{ filters: Partial<MyTicketsFilters> }>(),
+    'Saved Ticket Filter Applied': props<{ filter: SavedTicketFilter }>(),
 
     'Ticket Dialog Opened': props<TicketDialogState>(),
     'Ticket Dialog Closed': emptyProps(),
@@ -54,6 +61,7 @@ export const QueueActions = createActionGroup({
     'Ticket Update Requested': props<UpdateTicketWithTransition>(),
     'Ticket Transition Requested': props<{ ticket: Ticket; toStatusId: string }>(),
     'Ticket Delete Requested': props<{ ticketId: string }>(),
+    'Tickets Bulk Update Requested': props<{ request: BulkUpdateTicketsRequest }>(),
     'Comment Create Requested': props<{ ticketId: string; request: CreateTicketCommentRequest }>(),
 
     'Project Create Requested': props<{ request: CreateProjectRequest }>(),
@@ -63,6 +71,9 @@ export const QueueActions = createActionGroup({
     'Ticket Type Create Requested': props<{ request: CreateTicketTypeRequest }>(),
     'Ticket Type Delete Requested': props<{ typeId: string }>(),
     'Workflow Save Requested': props<{ projectId: string; request: SaveWorkflowRequest }>(),
+    'Saved Ticket Filter Create Requested': props<{ request: CreateSavedTicketFilterRequest }>(),
+    'Saved Ticket Filter Update Requested': props<{ filterId: string; request: UpdateSavedTicketFilterRequest }>(),
+    'Saved Ticket Filter Delete Requested': props<{ filterId: string }>(),
 
     'Mutation Succeeded': props<{ message?: string; focusTicketId?: string }>(),
     'Mutation Failed': props<{ error: string }>(),

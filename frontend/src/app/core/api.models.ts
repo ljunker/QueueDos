@@ -99,6 +99,29 @@ export interface TicketChange {
   createdAt: string;
 }
 
+export type SavedTicketFilterView = 'PROJECT_LIST' | 'MY_TICKETS';
+
+export interface SavedTicketFilterCriteria {
+  projectId: string | null;
+  q: string;
+  statusId: string;
+  typeId: string;
+  priority: Priority | null;
+  assigneeId: string;
+  label: string;
+  sort: string;
+}
+
+export interface SavedTicketFilter {
+  id: string;
+  organizationId: string;
+  ownerId: string;
+  name: string;
+  view: SavedTicketFilterView;
+  projectId: string | null;
+  filters: SavedTicketFilterCriteria;
+}
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -119,6 +142,7 @@ export interface BootstrapResponse {
   tickets: Ticket[];
   comments: TicketComment[];
   ticketChanges: TicketChange[];
+  savedTicketFilters: SavedTicketFilter[];
   priorities: Priority[];
 }
 
@@ -202,7 +226,26 @@ export interface TransitionTicketRequest {
   toStatusId: string;
 }
 
+export interface BulkUpdateTicketsRequest {
+  ticketIds: string[];
+  assigneeId?: string | null;
+  clearAssignee?: boolean;
+  priority?: Priority | null;
+}
+
 export interface SaveWorkflowRequest {
   statuses: WorkflowStatus[];
   transitions: WorkflowTransition[];
+}
+
+export interface CreateSavedTicketFilterRequest {
+  name: string;
+  view: SavedTicketFilterView;
+  projectId: string | null;
+  filters: SavedTicketFilterCriteria;
+}
+
+export interface UpdateSavedTicketFilterRequest {
+  name?: string;
+  filters?: SavedTicketFilterCriteria;
 }

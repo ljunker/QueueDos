@@ -3,6 +3,9 @@ package de.ljunker.queuedos.api
 import de.ljunker.queuedos.module
 import de.ljunker.queuedos.domain.Project
 import de.ljunker.queuedos.domain.Role
+import de.ljunker.queuedos.domain.SavedTicketFilter
+import de.ljunker.queuedos.domain.SavedTicketFilterCriteria
+import de.ljunker.queuedos.domain.SavedTicketFilterView
 import de.ljunker.queuedos.domain.Ticket
 import de.ljunker.queuedos.domain.TicketComment
 import de.ljunker.queuedos.domain.TicketType
@@ -101,6 +104,40 @@ class ApiRoutesTest {
         }.body<List<Ticket>>()
         assertTrue(listedTickets.any { it.id == ticket.id })
 
+        val savedFilter = client.post("/api/saved-ticket-filters") {
+            auth(adminToken)
+            jsonBody(
+                CreateSavedTicketFilterRequest(
+                    name = "Database work",
+                    view = SavedTicketFilterView.PROJECT_LIST,
+                    projectId = project.id,
+                    filters = SavedTicketFilterCriteria(q = "database", typeId = updatedType.id)
+                )
+            )
+        }.body<SavedTicketFilter>()
+        val renamedFilter = client.put("/api/saved-ticket-filters/${savedFilter.id}") {
+            auth(adminToken)
+            jsonBody(UpdateSavedTicketFilterRequest(name = "Production database work"))
+        }.body<SavedTicketFilter>()
+        assertEquals("Production database work", renamedFilter.name)
+        assertEquals(
+            listOf(renamedFilter),
+            client.get("/api/bootstrap") { auth(adminToken) }.body<BootstrapResponse>().savedTicketFilters
+        )
+        assertTrue(client.get("/api/bootstrap") { auth(memberToken) }.body<BootstrapResponse>().savedTicketFilters.isEmpty())
+
+        val bulkUpdated = client.post("/api/tickets/bulk-update") {
+            auth(adminToken)
+            jsonBody(
+                BulkUpdateTicketsRequest(
+                    ticketIds = listOf(ticket.id),
+                    assigneeId = "user-admin",
+                    priority = de.ljunker.queuedos.domain.Priority.CRITICAL
+                )
+            )
+        }.body<List<Ticket>>()
+        assertEquals("user-admin", bulkUpdated.single().assigneeId)
+
         val comment = client.post("/api/tickets/${ticket.id}/comments") {
             auth(adminToken)
             jsonBody(CreateTicketCommentRequest("Observed during import."))
@@ -155,6 +192,11 @@ class ApiRoutesTest {
             auth(adminToken)
         }
         assertEquals(HttpStatusCode.NoContent, deleteUnusedType.status)
+
+        val deleteSavedFilter = client.delete("/api/saved-ticket-filters/${savedFilter.id}") {
+            auth(adminToken)
+        }
+        assertEquals(HttpStatusCode.NoContent, deleteSavedFilter.status)
     }
 
     private suspend fun login(client: HttpClient, email: String, password: String): String =

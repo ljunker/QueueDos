@@ -6,9 +6,12 @@ import {
   CreateTicketCommentRequest,
   CreateTicketTypeRequest,
   CreateUserRequest,
+  BulkUpdateTicketsRequest,
   Priority,
   Project,
   PublicUser,
+  SavedTicketFilter,
+  SavedTicketFilterView,
   Ticket,
   TicketChange,
   TicketComment,
@@ -17,16 +20,31 @@ import {
   Workflow,
   WorkflowStatus
 } from '../../core/api.models';
-import { TicketFilters, WorkflowStatusPatch, WorkflowTransitionPatch, WorkspaceTab } from '../../state/queue.models';
+import {
+  MyTicketsFilters,
+  TicketFilters,
+  WorkflowStatusPatch,
+  WorkflowTransitionPatch,
+  WorkspaceTab
+} from '../../state/queue.models';
 import { AdminViewComponent } from './admin-view.component';
 import { BoardViewComponent } from './board-view.component';
+import { MyTicketsViewComponent } from './my-tickets-view.component';
+import { ProjectDashboardViewComponent } from './project-dashboard-view.component';
 import { TicketDetailViewComponent } from './ticket-detail-view.component';
 import { TicketListViewComponent } from './ticket-list-view.component';
 
 @Component({
   selector: 'qd-workspace-tab-host',
   standalone: true,
-  imports: [AdminViewComponent, BoardViewComponent, TicketDetailViewComponent, TicketListViewComponent],
+  imports: [
+    AdminViewComponent,
+    BoardViewComponent,
+    MyTicketsViewComponent,
+    ProjectDashboardViewComponent,
+    TicketDetailViewComponent,
+    TicketListViewComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="tab-panel">
@@ -43,6 +61,14 @@ import { TicketListViewComponent } from './ticket-list-view.component';
             (ticketTransitioned)="ticketTransitioned.emit($event)"
             (transitionDenied)="transitionDenied.emit()" />
         }
+        @case ('dashboard') {
+          <qd-project-dashboard-view
+            [tickets]="projectTickets()"
+            [statuses]="statuses()"
+            [priorities]="priorities()"
+            [users]="users()"
+            (filtersChanged)="filtersChanged.emit($event)" />
+        }
         @case ('list') {
           <qd-ticket-list-view
             [tickets]="visibleTickets()"
@@ -53,16 +79,41 @@ import { TicketListViewComponent } from './ticket-list-view.component';
             [priorities]="priorities()"
             [users]="activeUsers()"
             [allUsers]="users()"
+            [savedFilters]="projectSavedFilters()"
             (filtersChanged)="filtersChanged.emit($event)"
-            (ticketOpened)="ticketOpened.emit($event)" />
+            (ticketOpened)="ticketOpened.emit($event)"
+            (savedFilterCreated)="savedFilterCreated.emit({ view: 'PROJECT_LIST', name: $event })"
+            (savedFilterApplied)="savedFilterApplied.emit($event)"
+            (savedFilterRenamed)="savedFilterRenamed.emit($event)"
+            (savedFilterDeleted)="savedFilterDeleted.emit($event)"
+            (bulkUpdateRequested)="bulkUpdateRequested.emit($event)" />
+        }
+        @case ('my-tickets') {
+          <qd-my-tickets-view
+            [tickets]="myTickets()"
+            [filters]="myTicketsFilters()"
+            [projects]="projects()"
+            [types]="data()?.ticketTypes ?? []"
+            [workflows]="data()?.workflows ?? []"
+            [priorities]="priorities()"
+            [activeUsers]="activeUsers()"
+            [users]="users()"
+            [savedFilters]="myTicketsSavedFilters()"
+            (filtersChanged)="myTicketsFiltersChanged.emit($event)"
+            (ticketOpened)="ticketOpened.emit($event)"
+            (savedFilterCreated)="savedFilterCreated.emit({ view: 'MY_TICKETS', name: $event })"
+            (savedFilterApplied)="savedFilterApplied.emit($event)"
+            (savedFilterRenamed)="savedFilterRenamed.emit($event)"
+            (savedFilterDeleted)="savedFilterDeleted.emit($event)"
+            (bulkUpdateRequested)="bulkUpdateRequested.emit($event)" />
         }
         @case ('detail') {
           <qd-ticket-detail-view
             [ticket]="selectedTicket()"
             [comments]="selectedTicketComments()"
             [changes]="selectedTicketChanges()"
-            [workflow]="workflow()"
-            [types]="projectTypes()"
+            [workflow]="selectedTicketWorkflow()"
+            [types]="selectedTicketTypes()"
             [users]="users()"
             (closed)="detailClosed.emit()"
             (editRequested)="editRequested.emit($event)"
@@ -109,18 +160,25 @@ export class WorkspaceTabHostComponent {
   readonly statuses = input<WorkflowStatus[]>([]);
   readonly projectTickets = input<Ticket[]>([]);
   readonly visibleTickets = input<Ticket[]>([]);
+  readonly myTickets = input<Ticket[]>([]);
   readonly projectTypes = input<TicketType[]>([]);
   readonly priorities = input<Priority[]>([]);
   readonly filters = input.required<TicketFilters>();
+  readonly myTicketsFilters = input.required<MyTicketsFilters>();
   readonly selectedTicket = input<Ticket | null>(null);
+  readonly selectedTicketWorkflow = input<Workflow | null>(null);
+  readonly selectedTicketTypes = input<TicketType[]>([]);
   readonly selectedTicketComments = input<TicketComment[]>([]);
   readonly selectedTicketChanges = input<TicketChange[]>([]);
   readonly workflowDraft = input<Workflow | null>(null);
+  readonly projectSavedFilters = input<SavedTicketFilter[]>([]);
+  readonly myTicketsSavedFilters = input<SavedTicketFilter[]>([]);
 
   readonly ticketOpened = output<string>();
   readonly ticketTransitioned = output<{ ticket: Ticket; toStatusId: string }>();
   readonly transitionDenied = output<void>();
   readonly filtersChanged = output<Partial<TicketFilters>>();
+  readonly myTicketsFiltersChanged = output<Partial<MyTicketsFilters>>();
   readonly detailClosed = output<void>();
   readonly editRequested = output<string>();
   readonly commentSubmitted = output<{ ticketId: string; request: CreateTicketCommentRequest }>();
@@ -137,4 +195,9 @@ export class WorkspaceTabHostComponent {
   readonly transitionPatched = output<WorkflowTransitionPatch>();
   readonly transitionRemoved = output<number>();
   readonly workflowSaved = output<void>();
+  readonly savedFilterCreated = output<{ view: SavedTicketFilterView; name: string }>();
+  readonly savedFilterApplied = output<SavedTicketFilter>();
+  readonly savedFilterRenamed = output<{ filterId: string; name: string }>();
+  readonly savedFilterDeleted = output<string>();
+  readonly bulkUpdateRequested = output<BulkUpdateTicketsRequest>();
 }
