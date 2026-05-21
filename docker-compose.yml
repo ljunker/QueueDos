@@ -9,6 +9,12 @@ services:
       QUEUEDOS_DATABASE_USER: queuedos
       QUEUEDOS_DATABASE_PASSWORD: queuedos
       QUEUEDOS_SESSION_SECRET: queuedos-local-dev-session-secret-change-me
+    healthcheck:
+      test: [ "CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/health || exit 1" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     depends_on:
       db:
         condition: service_healthy
