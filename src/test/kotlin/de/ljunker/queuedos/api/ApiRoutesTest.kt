@@ -1,38 +1,21 @@
 package de.ljunker.queuedos.api
 
-import de.ljunker.queuedos.module
-import de.ljunker.queuedos.domain.Project
+import de.ljunker.queuedos.application.QueueDosBackend
 import de.ljunker.queuedos.domain.Role
-import de.ljunker.queuedos.domain.SavedTicketFilter
-import de.ljunker.queuedos.domain.SavedTicketFilterCriteria
 import de.ljunker.queuedos.domain.SavedTicketFilterView
-import de.ljunker.queuedos.domain.Ticket
-import de.ljunker.queuedos.domain.TicketComment
-import de.ljunker.queuedos.domain.TicketType
-import de.ljunker.queuedos.domain.Workflow
-import de.ljunker.queuedos.domain.WorkflowTransition
-import de.ljunker.queuedos.persistence.DataStore
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
-import io.ktor.client.request.HttpRequestBuilder
-import io.ktor.client.request.delete
-import io.ktor.client.request.get
-import io.ktor.client.request.header
-import io.ktor.client.request.post
-import io.ktor.client.request.put
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.contentType
-import io.ktor.serialization.kotlinx.json.json
-import io.ktor.server.testing.testApplication
+import de.ljunker.queuedos.module
+import de.ljunker.queuedos.support.PostgresTestBackend
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.request.*
+import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.testing.*
 import kotlinx.serialization.json.Json
-import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
 
 class ApiRoutesTest {
     private val json = Json {
@@ -63,7 +46,7 @@ class ApiRoutesTest {
         val project = client.post("/api/projects") {
             auth(adminToken)
             jsonBody(CreateProjectRequest("OPS", "Operations"))
-        }.body<Project>()
+        }.body<ProjectResponse>()
         assertEquals("OPS", project.key)
 
         val bootstrap = client.get("/api/bootstrap") {
@@ -75,11 +58,11 @@ class ApiRoutesTest {
         val createdType = client.post("/api/ticket-types") {
             auth(adminToken)
             jsonBody(CreateTicketTypeRequest(projectId = project.id, name = "Incident", color = "#dc2626"))
-        }.body<TicketType>()
+        }.body<TicketTypeResponse>()
         val updatedType = client.put("/api/ticket-types/${createdType.id}") {
             auth(adminToken)
             jsonBody(UpdateTicketTypeRequest(name = "Production Incident", color = "#b91c1c"))
-        }.body<TicketType>()
+        }.body<TicketTypeResponse>()
         assertEquals("Production Incident", updatedType.name)
 
         val ticket = client.post("/api/tickets") {
@@ -95,13 +78,13 @@ class ApiRoutesTest {
                     estimate = 13
                 )
             )
-        }.body<Ticket>()
+        }.body<TicketResponse>()
         assertEquals("OPS-1", ticket.key)
         assertEquals(listOf("database", "urgent"), ticket.labels)
 
         val listedTickets = client.get("/api/tickets?projectId=${project.id}&q=database&typeId=${updatedType.id}&label=database") {
             auth(adminToken)
-        }.body<List<Ticket>>()
+        }.body<List<TicketResponse>>()
         assertTrue(listedTickets.any { it.id == ticket.id })
 
         val savedFilter = client.post("/api/saved-ticket-filters") {
@@ -111,14 +94,14 @@ class ApiRoutesTest {
                     name = "Database work",
                     view = SavedTicketFilterView.PROJECT_LIST,
                     projectId = project.id,
-                    filters = SavedTicketFilterCriteria(q = "database", typeId = updatedType.id)
+                    filters = SavedTicketFilterCriteriaDto(q = "database", typeId = updatedType.id)
                 )
             )
-        }.body<SavedTicketFilter>()
+        }.body<SavedTicketFilterResponse>()
         val renamedFilter = client.put("/api/saved-ticket-filters/${savedFilter.id}") {
             auth(adminToken)
             jsonBody(UpdateSavedTicketFilterRequest(name = "Production database work"))
-        }.body<SavedTicketFilter>()
+        }.body<SavedTicketFilterResponse>()
         assertEquals("Production database work", renamedFilter.name)
         assertEquals(
             listOf(renamedFilter),
@@ -135,13 +118,13 @@ class ApiRoutesTest {
                     priority = de.ljunker.queuedos.domain.Priority.CRITICAL
                 )
             )
-        }.body<List<Ticket>>()
+        }.body<List<TicketResponse>>()
         assertEquals("user-admin", bulkUpdated.single().assigneeId)
 
         val comment = client.post("/api/tickets/${ticket.id}/comments") {
             auth(adminToken)
             jsonBody(CreateTicketCommentRequest("Observed during import."))
-        }.body<TicketComment>()
+        }.body<TicketCommentResponse>()
         assertEquals(ticket.id, comment.ticketId)
 
         val detail = client.get("/api/tickets/${ticket.id}") {
@@ -164,7 +147,7 @@ class ApiRoutesTest {
                 SaveWorkflowRequest(
                     statuses = workflow.statuses,
                     transitions = listOf(
-                        WorkflowTransition(
+                        WorkflowTransitionDto(
                             id = "transition-admin-only",
                             fromStatusId = sourceStatus,
                             toStatusId = targetStatus,
@@ -173,7 +156,7 @@ class ApiRoutesTest {
                     )
                 )
             )
-        }.body<Workflow>()
+        }.body<WorkflowResponse>()
         assertEquals(1, savedWorkflow.transitions.size)
 
         val memberTransition = client.post("/api/tickets/${ticket.id}/transition") {
@@ -185,7 +168,7 @@ class ApiRoutesTest {
         val movedTicket = client.post("/api/tickets/${ticket.id}/transition") {
             auth(adminToken)
             jsonBody(TransitionTicketRequest(targetStatus))
-        }.body<Ticket>()
+        }.body<TicketResponse>()
         assertEquals(targetStatus, movedTicket.statusId)
 
         val deleteUnusedType = client.delete("/api/ticket-types/${defaultType.id}") {
@@ -213,8 +196,5 @@ class ApiRoutesTest {
         setBody(body)
     }
 
-    private fun newStore(): DataStore {
-        val dir = Files.createTempDirectory("queuedos-api-test")
-        return DataStore(dir.resolve("state.json"), json)
-    }
+    private fun newStore(): QueueDosBackend = PostgresTestBackend.create().backend
 }

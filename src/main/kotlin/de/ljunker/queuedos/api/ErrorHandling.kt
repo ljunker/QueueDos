@@ -1,17 +1,24 @@
 package de.ljunker.queuedos.api
 
-import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.Application
-import io.ktor.server.application.call
-import io.ktor.server.application.install
-import io.ktor.server.plugins.statuspages.StatusPages
-import io.ktor.server.response.respond
+import de.ljunker.queuedos.application.FailureKind
+import de.ljunker.queuedos.application.QueueDosFailure
+import io.ktor.http.*
+import io.ktor.server.application.*
+import io.ktor.server.plugins.statuspages.*
+import io.ktor.server.response.*
 import kotlinx.serialization.SerializationException
 
 internal fun Application.configureStatusPages() {
     install(StatusPages) {
-        exception<ApiException> { call, cause ->
-            call.respond(cause.status, ApiError(cause.message ?: "Request failed."))
+        exception<QueueDosFailure> { call, cause ->
+            val status = when (cause.kind) {
+                FailureKind.BAD_REQUEST -> HttpStatusCode.BadRequest
+                FailureKind.UNAUTHORIZED -> HttpStatusCode.Unauthorized
+                FailureKind.FORBIDDEN -> HttpStatusCode.Forbidden
+                FailureKind.NOT_FOUND -> HttpStatusCode.NotFound
+                FailureKind.CONFLICT -> HttpStatusCode.Conflict
+            }
+            call.respond(status, ApiError(cause.message))
         }
         exception<SerializationException> { call, _ ->
             call.respond(HttpStatusCode.BadRequest, ApiError("Invalid JSON request."))

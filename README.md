@@ -30,22 +30,31 @@ Vordefinierte Nutzer:
 - Persönliche projektübergreifende Ansicht für eigene Tickets.
 - Admin-Oberflächen für Nutzer, Projekte, Tickettypen und Workflows.
 
-Das Docker-Compose-Setup startet PostgreSQL und speichert QueueDos-Daten in relationalen Tabellen für Organisationen, Nutzer, Projekte, Tickettypen, Workflows, Workflow-Status, Workflow-Übergänge und Tickets. Für mehrere API-Container muss `QUEUEDOS_SESSION_SECRET` auf denselben starken Wert gesetzt werden, weil Anmeldungen als signierte stateless Tokens ausgegeben werden.
+Das Docker-Compose-Setup startet PostgreSQL und speichert QueueDos-Daten in relationalen Tabellen für Organisationen,
+Nutzer, Projekte, Tickettypen, Workflows, Workflow-Status, Workflow-Übergänge und Tickets. Flyway versioniert das
+Datenbankschema beim Start. Für mehrere API-Container muss `QUEUEDOS_SESSION_SECRET` auf denselben starken Wert gesetzt
+werden, weil Anmeldungen als signierte stateless Tokens ausgegeben werden.
 
 Wichtige Umgebungsvariablen:
 
-- `QUEUEDOS_DATABASE_URL`: JDBC-URL für PostgreSQL, z. B. `jdbc:postgresql://db:5432/queuedos`.
+- `QUEUEDOS_DATABASE_URL`: verpflichtende JDBC-URL für PostgreSQL, z. B. `jdbc:postgresql://db:5432/queuedos`.
 - `QUEUEDOS_DATABASE_USER` / `QUEUEDOS_DATABASE_PASSWORD`: PostgreSQL-Zugangsdaten.
-- `QUEUEDOS_DATA_FILE`: optionaler JSON-Dateipfad, nur wenn `QUEUEDOS_DATABASE_URL` nicht gesetzt ist.
 - `QUEUEDOS_SESSION_SECRET`: gemeinsamer HMAC-Schlüssel für stateless Session-Tokens.
 - `QUEUEDOS_SESSION_TTL_HOURS`: Token-Laufzeit in Stunden, Standard `12`.
 
-Ohne `QUEUEDOS_DATABASE_URL` fällt die Anwendung für lokale Experimente weiterhin auf `QUEUEDOS_DATA_FILE` zurück. Bestehende Daten aus dem früheren PostgreSQL-Snapshot `queuedos_state` werden beim ersten Start in die relationalen Tabellen migriert.
+Ohne `QUEUEDOS_DATABASE_URL` startet die Anwendung nicht. Bestehende Daten aus dem früheren PostgreSQL-Snapshot
+`queuedos_state` werden beim ersten Flyway-Lauf in die relationalen Tabellen migriert.
 
 ## Zustandsprüfung
 
 ```bash
 curl http://localhost:8080/api/health
+```
+
+Die Backend-Tests starten PostgreSQL über Testcontainers:
+
+```bash
+./gradlew test
 ```
 
 ## Angular-Frontend

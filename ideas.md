@@ -19,7 +19,7 @@
 
 ## Cluster- und Betriebsfähigkeit
 
-- Datenbankmigrationen mit Flyway oder Liquibase ergänzen.
+- [x] Datenbankmigrationen mit Flyway oder Liquibase ergänzen.
 - Container stateless machen.
 - Healthchecks aufteilen in `live` und `ready`.
 - Konfiguration vollständig über Environment-Variablen abbilden.
@@ -28,11 +28,11 @@
 
 ## Architektur
 
-- Store-Schicht von Dateiablage auf Repository-Interfaces trennen.
-- Domänenlogik für Workflow-Transitions aus dem Store herauslösen.
-- Authentifizierung und Autorisierung als eigene Module strukturieren.
-- API-DTOs von Persistenzmodellen trennen.
-- Validierung zentralisieren, damit UI und API konsistente Regeln haben.
+- [x] Domänenlogik für Workflow-Transitions aus dem Store herauslösen.
+- [x] Authentifizierung und Autorisierung als eigene Module strukturieren.
+- [x] API-DTOs von Persistenzmodellen trennen.
+- [x] Validierung zentralisieren, damit UI und API konsistente Regeln haben.
+- [x] kein Snapshot Storing machen, sondern transactions auf der db.
 
 ## Produktideen
 

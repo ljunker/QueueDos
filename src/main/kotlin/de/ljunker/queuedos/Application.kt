@@ -1,20 +1,19 @@
 package de.ljunker.queuedos
 
+import de.ljunker.queuedos.api.configureApiAuthentication
 import de.ljunker.queuedos.api.configureRoutes
 import de.ljunker.queuedos.api.configureStatusPages
+import de.ljunker.queuedos.application.BadRequestFailure
+import de.ljunker.queuedos.application.QueueDosBackend
 import de.ljunker.queuedos.config.appJson
-import de.ljunker.queuedos.persistence.FileAppDataStorage
-import de.ljunker.queuedos.persistence.DataStore
-import de.ljunker.queuedos.persistence.PostgreSqlAppDataStorage
+import de.ljunker.queuedos.persistence.DriverManagerDataSource
 import de.ljunker.queuedos.security.AuthTokenCodec
-import io.ktor.serialization.kotlinx.json.json
-import io.ktor.server.application.Application
-import io.ktor.server.application.install
-import io.ktor.server.engine.embeddedServer
-import io.ktor.server.netty.Netty
-import io.ktor.server.plugins.callloging.CallLogging
-import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
-import java.nio.file.Path
+import io.ktor.serialization.kotlinx.json.*
+import io.ktor.server.application.*
+import io.ktor.server.engine.*
+import io.ktor.server.netty.*
+import io.ktor.server.plugins.callloging.*
+import io.ktor.server.plugins.contentnegotiation.*
 import java.time.Duration
 
 fun main() {
@@ -25,35 +24,28 @@ fun main() {
 }
 
 fun Application.module(
-    store: DataStore = dataStoreFromEnvironment()
+    backend: QueueDosBackend = backendFromEnvironment()
 ) {
     install(CallLogging)
     install(ContentNegotiation) {
         json(appJson)
     }
     configureStatusPages()
-    configureRoutes(store)
+    configureApiAuthentication(backend.services.auth)
+    configureRoutes(backend.services)
 }
 
-private fun dataStoreFromEnvironment(): DataStore {
+private fun backendFromEnvironment(): QueueDosBackend {
     val tokenCodec = AuthTokenCodec(
         secret = System.getenv("QUEUEDOS_SESSION_SECRET") ?: "queuedos-development-session-secret-change-me",
         ttl = Duration.ofHours(System.getenv("QUEUEDOS_SESSION_TTL_HOURS")?.toLongOrNull() ?: 12)
     )
     val databaseUrl = System.getenv("QUEUEDOS_DATABASE_URL")?.takeIf { it.isNotBlank() }
-    val storage = if (databaseUrl == null) {
-        FileAppDataStorage(
-            dataFile = Path.of(System.getenv("QUEUEDOS_DATA_FILE") ?: "data/queuedos.json"),
-            json = appJson
-        )
-    } else {
-        PostgreSqlAppDataStorage(
-            jdbcUrl = databaseUrl,
-            username = System.getenv("QUEUEDOS_DATABASE_USER"),
-            password = System.getenv("QUEUEDOS_DATABASE_PASSWORD"),
-            json = appJson,
-            legacySnapshotId = System.getenv("QUEUEDOS_LEGACY_DATABASE_STATE_ID") ?: "default"
-        )
-    }
-    return DataStore(storage, tokenCodec)
+        ?: throw BadRequestFailure("QUEUEDOS_DATABASE_URL is required.")
+    val dataSource = DriverManagerDataSource(
+        jdbcUrl = databaseUrl,
+        username = System.getenv("QUEUEDOS_DATABASE_USER"),
+        password = System.getenv("QUEUEDOS_DATABASE_PASSWORD")
+    )
+    return QueueDosBackend.create(dataSource, appJson, tokenCodec)
 }

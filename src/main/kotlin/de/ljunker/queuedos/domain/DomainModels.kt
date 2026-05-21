@@ -35,25 +35,6 @@ data class User(
 )
 
 @Serializable
-data class PublicUser(
-    val id: String,
-    val organizationId: String,
-    val email: String,
-    val displayName: String,
-    val role: Role,
-    val active: Boolean
-)
-
-fun User.publicView() = PublicUser(
-    id = id,
-    organizationId = organizationId,
-    email = email,
-    displayName = displayName,
-    role = role,
-    active = active
-)
-
-@Serializable
 data class Project(
     val id: String,
     val organizationId: String,

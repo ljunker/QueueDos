@@ -1,13 +1,13 @@
 package de.ljunker.queuedos.validation
 
-import de.ljunker.queuedos.api.ApiException
+import de.ljunker.queuedos.application.BadRequestFailure
+import de.ljunker.queuedos.application.ConflictFailure
 import de.ljunker.queuedos.domain.Ticket
 import de.ljunker.queuedos.domain.WorkflowStatus
 import de.ljunker.queuedos.domain.WorkflowTransition
-import io.ktor.http.HttpStatusCode
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
-import java.util.Locale
+import java.util.*
 
 private val projectKeyPattern = Regex("^[A-Z][A-Z0-9]{1,9}$")
 private val hexColorPattern = Regex("^#[0-9a-fA-F]{6}$")
@@ -15,7 +15,7 @@ private val hexColorPattern = Regex("^#[0-9a-fA-F]{6}$")
 internal fun normalizeEmail(value: String): String {
     val email = value.trim().lowercase(Locale.ROOT)
     if (!email.contains("@") || email.length > 190) {
-        throw ApiException(HttpStatusCode.BadRequest, "Valid email required.")
+        throw BadRequestFailure("Valid email required.")
     }
     return email
 }
@@ -23,7 +23,7 @@ internal fun normalizeEmail(value: String): String {
 internal fun normalizeProjectKey(value: String): String {
     val key = value.trim().uppercase(Locale.ROOT)
     if (!projectKeyPattern.matches(key)) {
-        throw ApiException(HttpStatusCode.BadRequest, "Project key must be 2-10 uppercase letters or numbers.")
+        throw BadRequestFailure("Project key must be 2-10 uppercase letters or numbers.")
     }
     return key
 }
@@ -31,7 +31,7 @@ internal fun normalizeProjectKey(value: String): String {
 internal fun normalizeColor(value: String): String {
     val color = value.trim()
     if (!hexColorPattern.matches(color)) {
-        throw ApiException(HttpStatusCode.BadRequest, "Color must be a hex value like #2563eb.")
+        throw BadRequestFailure("Color must be a hex value like #2563eb.")
     }
     return color
 }
@@ -39,14 +39,14 @@ internal fun normalizeColor(value: String): String {
 internal fun requireName(value: String, label: String): String {
     val name = value.trim()
     if (name.isBlank() || name.length > 160) {
-        throw ApiException(HttpStatusCode.BadRequest, "$label is required.")
+        throw BadRequestFailure("$label is required.")
     }
     return name
 }
 
 internal fun requirePassword(value: String): String {
     if (value.length < 4) {
-        throw ApiException(HttpStatusCode.BadRequest, "Password must have at least 4 characters.")
+        throw BadRequestFailure("Password must have at least 4 characters.")
     }
     return value
 }
@@ -58,7 +58,7 @@ internal fun normalizeLabels(values: List<String>): List<String> =
         .distinct()
         .also { labels ->
             if (labels.any { it.length > 32 } || labels.size > 12) {
-                throw ApiException(HttpStatusCode.BadRequest, "Labels must be 12 values or fewer with at most 32 characters each.")
+                throw BadRequestFailure("Labels must be 12 values or fewer with at most 32 characters each.")
             }
         }
 
@@ -67,7 +67,7 @@ internal fun normalizeDueDate(value: String?): String? {
     try {
         LocalDate.parse(dueDate)
     } catch (_: DateTimeParseException) {
-        throw ApiException(HttpStatusCode.BadRequest, "Due date must use YYYY-MM-DD.")
+        throw BadRequestFailure("Due date must use YYYY-MM-DD.")
     }
     return dueDate
 }
@@ -75,7 +75,7 @@ internal fun normalizeDueDate(value: String?): String? {
 internal fun normalizeEstimate(value: Int?): Int? {
     if (value == null) return null
     if (value < 0 || value > 999) {
-        throw ApiException(HttpStatusCode.BadRequest, "Estimate must be between 0 and 999.")
+        throw BadRequestFailure("Estimate must be between 0 and 999.")
     }
     return value
 }
@@ -85,7 +85,7 @@ internal fun normalizeStatuses(
     nextId: (String) -> String
 ): List<WorkflowStatus> {
     if (statuses.isEmpty()) {
-        throw ApiException(HttpStatusCode.BadRequest, "Workflow needs at least one status.")
+        throw BadRequestFailure("Workflow needs at least one status.")
     }
     val normalized = statuses.mapIndexed { index, status ->
         status.copy(
@@ -96,10 +96,10 @@ internal fun normalizeStatuses(
         )
     }
     if (normalized.map { it.id }.distinct().size != normalized.size) {
-        throw ApiException(HttpStatusCode.BadRequest, "Workflow status IDs must be unique.")
+        throw BadRequestFailure("Workflow status IDs must be unique.")
     }
     if (normalized.map { it.name.lowercase(Locale.ROOT) }.distinct().size != normalized.size) {
-        throw ApiException(HttpStatusCode.BadRequest, "Workflow status names must be unique.")
+        throw BadRequestFailure("Workflow status names must be unique.")
     }
     return normalized
 }
@@ -114,10 +114,10 @@ internal fun normalizeTransitions(
         .map {
             val fromStatusId = it.fromStatusId?.takeIf { value -> value.isNotBlank() }
             if ((!it.globalTransition && fromStatusId !in statusIds) || it.toStatusId !in statusIds) {
-                throw ApiException(HttpStatusCode.BadRequest, "Workflow transition points to an unknown status.")
+                throw BadRequestFailure("Workflow transition points to an unknown status.")
             }
             val allowedRoles = it.allowedRoles.distinct().ifEmpty {
-                throw ApiException(HttpStatusCode.BadRequest, "Workflow transition needs at least one role.")
+                throw BadRequestFailure("Workflow transition needs at least one role.")
             }
             it.copy(
                 id = it.id.ifBlank { nextId("transition") },
@@ -144,7 +144,7 @@ internal fun validateRequiredFields(ticket: Ticket, requiredFields: List<String>
             else -> false
         }
         if (missing) {
-            throw ApiException(HttpStatusCode.Conflict, "Required field '$field' is missing.")
+            throw ConflictFailure("Required field '$field' is missing.")
         }
     }
 }

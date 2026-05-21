@@ -1,20 +1,8 @@
 package de.ljunker.queuedos.api
 
-import de.ljunker.queuedos.domain.Organization
 import de.ljunker.queuedos.domain.Priority
-import de.ljunker.queuedos.domain.Project
-import de.ljunker.queuedos.domain.PublicUser
 import de.ljunker.queuedos.domain.Role
-import de.ljunker.queuedos.domain.SavedTicketFilter
-import de.ljunker.queuedos.domain.SavedTicketFilterCriteria
 import de.ljunker.queuedos.domain.SavedTicketFilterView
-import de.ljunker.queuedos.domain.Ticket
-import de.ljunker.queuedos.domain.TicketChange
-import de.ljunker.queuedos.domain.TicketComment
-import de.ljunker.queuedos.domain.TicketType
-import de.ljunker.queuedos.domain.Workflow
-import de.ljunker.queuedos.domain.WorkflowStatus
-import de.ljunker.queuedos.domain.WorkflowTransition
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -31,29 +19,160 @@ data class LoginRequest(
 @Serializable
 data class LoginResponse(
     val token: String,
-    val user: PublicUser
+    val user: UserResponse
 )
 
 @Serializable
 data class BootstrapResponse(
-    val currentUser: PublicUser,
-    val organizations: List<Organization>,
-    val users: List<PublicUser>,
-    val projects: List<Project>,
-    val ticketTypes: List<TicketType>,
-    val workflows: List<Workflow>,
-    val tickets: List<Ticket>,
-    val comments: List<TicketComment> = emptyList(),
-    val ticketChanges: List<TicketChange> = emptyList(),
-    val savedTicketFilters: List<SavedTicketFilter> = emptyList(),
+    val currentUser: UserResponse,
+    val organizations: List<OrganizationResponse>,
+    val users: List<UserResponse>,
+    val projects: List<ProjectResponse>,
+    val ticketTypes: List<TicketTypeResponse>,
+    val workflows: List<WorkflowResponse>,
+    val tickets: List<TicketResponse>,
+    val comments: List<TicketCommentResponse> = emptyList(),
+    val ticketChanges: List<TicketChangeResponse> = emptyList(),
+    val savedTicketFilters: List<SavedTicketFilterResponse> = emptyList(),
     val priorities: List<Priority> = Priority.entries.toList()
 )
 
 @Serializable
 data class TicketDetailResponse(
-    val ticket: Ticket,
-    val comments: List<TicketComment>,
-    val changes: List<TicketChange>
+    val ticket: TicketResponse,
+    val comments: List<TicketCommentResponse>,
+    val changes: List<TicketChangeResponse>
+)
+
+@Serializable
+data class OrganizationResponse(
+    val id: String,
+    val name: String
+)
+
+@Serializable
+data class UserResponse(
+    val id: String,
+    val organizationId: String,
+    val email: String,
+    val displayName: String,
+    val role: Role,
+    val active: Boolean
+)
+
+@Serializable
+data class ProjectResponse(
+    val id: String,
+    val organizationId: String,
+    val key: String,
+    val name: String,
+    val description: String = "",
+    val nextTicketNumber: Int = 1,
+    val archived: Boolean = false
+)
+
+@Serializable
+data class TicketTypeResponse(
+    val id: String,
+    val organizationId: String,
+    val projectId: String,
+    val name: String,
+    val description: String = "",
+    val color: String = "#2563eb"
+)
+
+@Serializable
+data class WorkflowStatusDto(
+    val id: String,
+    val name: String,
+    val category: String = "TODO",
+    val sortOrder: Int = 0
+)
+
+@Serializable
+data class WorkflowTransitionDto(
+    val id: String,
+    val fromStatusId: String? = null,
+    val toStatusId: String,
+    val allowedRoles: List<Role> = listOf(Role.ADMIN, Role.MEMBER),
+    val requiredFields: List<String> = emptyList(),
+    val globalTransition: Boolean = false,
+    val allowBackward: Boolean = true
+)
+
+@Serializable
+data class WorkflowResponse(
+    val id: String,
+    val organizationId: String,
+    val projectId: String,
+    val statuses: List<WorkflowStatusDto>,
+    val transitions: List<WorkflowTransitionDto>
+)
+
+@Serializable
+data class TicketResponse(
+    val id: String,
+    val organizationId: String,
+    val projectId: String,
+    val number: Int,
+    val key: String,
+    val title: String,
+    val description: String = "",
+    val statusId: String,
+    val typeId: String,
+    val priority: Priority,
+    val assigneeId: String? = null,
+    val labels: List<String> = emptyList(),
+    val dueDate: String? = null,
+    val estimate: Int? = null,
+    val reporterId: String,
+    val createdAt: String,
+    val updatedAt: String
+)
+
+@Serializable
+data class TicketCommentResponse(
+    val id: String,
+    val organizationId: String,
+    val ticketId: String,
+    val authorId: String,
+    val body: String,
+    val createdAt: String
+)
+
+@Serializable
+data class TicketChangeResponse(
+    val id: String,
+    val organizationId: String,
+    val ticketId: String,
+    val actorId: String,
+    val field: String,
+    val oldValue: String? = null,
+    val newValue: String? = null,
+    val createdAt: String
+)
+
+@Serializable
+data class SavedTicketFilterCriteriaDto(
+    val projectId: String? = null,
+    val q: String = "",
+    val statusId: String = "",
+    val typeId: String = "",
+    val priority: Priority? = null,
+    val assigneeId: String = "",
+    val label: String = "",
+    val sort: String = "number"
+)
+
+@Serializable
+data class SavedTicketFilterResponse(
+    val id: String,
+    val organizationId: String,
+    val ownerId: String,
+    val name: String,
+    val view: SavedTicketFilterView,
+    val projectId: String? = null,
+    val filters: SavedTicketFilterCriteriaDto = SavedTicketFilterCriteriaDto()
 )
 
 @Serializable
@@ -142,8 +261,8 @@ data class CreateTicketCommentRequest(
 
 @Serializable
 data class SaveWorkflowRequest(
-    val statuses: List<WorkflowStatus>,
-    val transitions: List<WorkflowTransition>
+    val statuses: List<WorkflowStatusDto>,
+    val transitions: List<WorkflowTransitionDto>
 )
 
 @Serializable
@@ -151,13 +270,13 @@ data class CreateSavedTicketFilterRequest(
     val name: String,
     val view: SavedTicketFilterView,
     val projectId: String? = null,
-    val filters: SavedTicketFilterCriteria = SavedTicketFilterCriteria()
+    val filters: SavedTicketFilterCriteriaDto = SavedTicketFilterCriteriaDto()
 )
 
 @Serializable
 data class UpdateSavedTicketFilterRequest(
     val name: String? = null,
-    val filters: SavedTicketFilterCriteria? = null
+    val filters: SavedTicketFilterCriteriaDto? = null
 )
 
 @Serializable
