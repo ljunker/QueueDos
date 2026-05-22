@@ -4,6 +4,7 @@ import de.ljunker.queuedos.api.configureApiAuthentication
 import de.ljunker.queuedos.api.configureRoutes
 import de.ljunker.queuedos.api.configureStatusPages
 import de.ljunker.queuedos.application.BadRequestFailure
+import de.ljunker.queuedos.application.MicrosoftSsoSettings
 import de.ljunker.queuedos.application.QueueDosBackend
 import de.ljunker.queuedos.config.appJson
 import de.ljunker.queuedos.persistence.DriverManagerDataSource
@@ -47,5 +48,19 @@ private fun backendFromEnvironment(): QueueDosBackend {
         username = System.getenv("QUEUEDOS_DATABASE_USER"),
         password = System.getenv("QUEUEDOS_DATABASE_PASSWORD")
     )
-    return QueueDosBackend.create(dataSource, appJson, tokenCodec)
+    return QueueDosBackend.create(dataSource, appJson, tokenCodec, microsoftSsoSettings = microsoftSsoSettings())
+}
+
+private fun microsoftSsoSettings(): MicrosoftSsoSettings? {
+    val clientId = System.getenv("QUEUEDOS_MICROSOFT_CLIENT_ID")?.takeIf { it.isNotBlank() } ?: return null
+    val clientSecret = System.getenv("QUEUEDOS_MICROSOFT_CLIENT_SECRET")?.takeIf { it.isNotBlank() } ?: return null
+    val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
+    val publicBaseUrl = System.getenv("QUEUEDOS_PUBLIC_BASE_URL")?.trimEnd('/') ?: "http://localhost:$port"
+    return MicrosoftSsoSettings(
+        clientId = clientId,
+        clientSecret = clientSecret,
+        redirectUri = System.getenv("QUEUEDOS_MICROSOFT_REDIRECT_URI")?.takeIf { it.isNotBlank() }
+            ?: "$publicBaseUrl/api/auth/microsoft/callback",
+        tenant = System.getenv("QUEUEDOS_MICROSOFT_TENANT")?.takeIf { it.isNotBlank() } ?: "common"
+    )
 }

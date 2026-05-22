@@ -1,12 +1,13 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import {ChangeDetectionStrategy, Component, input, output} from '@angular/core';
 
 import {
   BootstrapResponse,
+  BulkUpdateTicketsRequest,
+  CreateActivityHookRequest,
   CreateProjectRequest,
   CreateTicketCommentRequest,
   CreateTicketTypeRequest,
   CreateUserRequest,
-  BulkUpdateTicketsRequest,
   Priority,
   Project,
   PublicUser,
@@ -16,6 +17,7 @@ import {
   TicketChange,
   TicketComment,
   TicketType,
+  UpdateActivityHookRequest,
   UpdateUserRequest,
   Workflow,
   WorkflowStatus
@@ -27,12 +29,12 @@ import {
   WorkflowTransitionPatch,
   WorkspaceTab
 } from '../../state/queue.models';
-import { AdminViewComponent } from './admin-view.component';
-import { BoardViewComponent } from './board-view.component';
-import { MyTicketsViewComponent } from './my-tickets-view.component';
-import { ProjectDashboardViewComponent } from './project-dashboard-view.component';
-import { TicketDetailViewComponent } from './ticket-detail-view.component';
-import { TicketListViewComponent } from './ticket-list-view.component';
+import {AdminViewComponent} from './admin-view.component';
+import {BoardViewComponent} from './board-view.component';
+import {MyTicketsViewComponent} from './my-tickets-view.component';
+import {ProjectDashboardViewComponent} from './project-dashboard-view.component';
+import {TicketDetailViewComponent} from './ticket-detail-view.component';
+import {TicketListViewComponent} from './ticket-list-view.component';
 
 @Component({
   selector: 'qd-workspace-tab-host',
@@ -115,8 +117,10 @@ import { TicketListViewComponent } from './ticket-list-view.component';
             [workflow]="selectedTicketWorkflow()"
             [types]="selectedTicketTypes()"
             [users]="users()"
+            [currentUser]="currentUser()"
             (closed)="detailClosed.emit()"
             (editRequested)="editRequested.emit($event)"
+            (commitmentChanged)="commitmentChanged.emit($event)"
             (commentSubmitted)="commentSubmitted.emit({ ticketId: $event.ticketId, request: { body: $event.body } })" />
         }
         @case ('admin') {
@@ -125,6 +129,8 @@ import { TicketListViewComponent } from './ticket-list-view.component';
               [projects]="projects()"
               [selectedProject]="selectedProject()"
               [tickets]="data()?.tickets ?? []"
+              [deletedTickets]="data()?.deletedTickets ?? []"
+              [activityHooks]="data()?.activityHooks ?? []"
               [users]="users()"
               [projectTypes]="projectTypes()"
               [workflowDraft]="workflowDraft()"
@@ -140,7 +146,11 @@ import { TicketListViewComponent } from './ticket-list-view.component';
               (transitionAdded)="transitionAdded.emit()"
               (transitionPatched)="transitionPatched.emit($event)"
               (transitionRemoved)="transitionRemoved.emit($event)"
-              (workflowSaved)="workflowSaved.emit()" />
+              (workflowSaved)="workflowSaved.emit()"
+              (ticketRestored)="ticketRestored.emit($event)"
+              (activityHookCreated)="activityHookCreated.emit($event)"
+              (activityHookUpdated)="activityHookUpdated.emit($event)"
+              (activityHookDeleted)="activityHookDeleted.emit($event)" />
           }
         }
       }
@@ -182,6 +192,7 @@ export class WorkspaceTabHostComponent {
   readonly detailClosed = output<void>();
   readonly editRequested = output<string>();
   readonly commentSubmitted = output<{ ticketId: string; request: CreateTicketCommentRequest }>();
+  readonly commitmentChanged = output<{ ticketId: string; committed: boolean }>();
   readonly projectCreated = output<CreateProjectRequest>();
   readonly projectSelected = output<string>();
   readonly userCreated = output<CreateUserRequest>();
@@ -195,6 +206,10 @@ export class WorkspaceTabHostComponent {
   readonly transitionPatched = output<WorkflowTransitionPatch>();
   readonly transitionRemoved = output<number>();
   readonly workflowSaved = output<void>();
+  readonly ticketRestored = output<string>();
+  readonly activityHookCreated = output<CreateActivityHookRequest>();
+  readonly activityHookUpdated = output<{ hookId: string; request: UpdateActivityHookRequest }>();
+  readonly activityHookDeleted = output<string>();
   readonly savedFilterCreated = output<{ view: SavedTicketFilterView; name: string }>();
   readonly savedFilterApplied = output<SavedTicketFilter>();
   readonly savedFilterRenamed = output<{ filterId: string; name: string }>();

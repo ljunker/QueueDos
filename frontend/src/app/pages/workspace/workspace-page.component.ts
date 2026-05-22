@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, inject } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { ActivatedRoute, ParamMap } from '@angular/router';
-import { Store } from '@ngrx/store';
+import {ChangeDetectionStrategy, Component, DestroyRef, inject} from '@angular/core';
+import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
+import {ActivatedRoute, ParamMap} from '@angular/router';
+import {Store} from '@ngrx/store';
 
 import {
   CreateSavedTicketFilterRequest,
@@ -10,19 +10,19 @@ import {
   SavedTicketFilterView,
   Ticket
 } from '../../core/api.models';
-import { SidebarComponent } from '../../shared/organisms/sidebar.component';
-import { TicketDialogComponent } from '../../shared/organisms/ticket-dialog.component';
-import { ToastComponent } from '../../shared/atoms/toast.component';
-import { WorkspaceTabHostComponent } from '../../shared/organisms/workspace-tab-host.component';
-import { WorkspaceToolbarComponent } from '../../shared/organisms/workspace-toolbar.component';
-import { QueueActions } from '../../state/queue.actions';
+import {SidebarComponent} from '../../shared/organisms/sidebar.component';
+import {TicketDialogComponent} from '../../shared/organisms/ticket-dialog.component';
+import {ToastComponent} from '../../shared/atoms/toast.component';
+import {WorkspaceTabHostComponent} from '../../shared/organisms/workspace-tab-host.component';
+import {WorkspaceToolbarComponent} from '../../shared/organisms/workspace-toolbar.component';
+import {QueueActions} from '../../state/queue.actions';
 import {
   selectActiveTab,
   selectActiveUsers,
   selectCurrentUser,
   selectData,
-  selectDialogTicket,
   selectDialogProject,
+  selectDialogTicket,
   selectDialogTypes,
   selectDialogWorkflow,
   selectError,
@@ -34,10 +34,10 @@ import {
   selectMyTicketsSavedFilters,
   selectOrganizations,
   selectPriorities,
+  selectProjects,
   selectProjectSavedTicketFilters,
   selectProjectTickets,
   selectProjectTypes,
-  selectProjects,
   selectSelectedProject,
   selectSelectedProjectId,
   selectSelectedTicket,
@@ -54,8 +54,8 @@ import {
   selectWorkflowDraft
 } from '../../state/queue.selectors';
 import {
-  myTicketsSort,
   MyTicketsFilters,
+  myTicketsSort,
   RouteWorkspaceState,
   TicketFilters,
   ticketSort,
@@ -124,6 +124,7 @@ import {
             (myTicketsFiltersChanged)="changeMyTicketsFilters($event)"
             (detailClosed)="store.dispatch(detailClosed())"
             (editRequested)="openEditDialog($event)"
+            (commitmentChanged)="store.dispatch(ticketCommitmentRequested($event))"
             (commentSubmitted)="store.dispatch(commentCreateRequested($event))"
             (projectCreated)="store.dispatch(projectCreateRequested({ request: $event }))"
             (projectSelected)="dispatchProjectSelected($event)"
@@ -138,6 +139,10 @@ import {
             (transitionPatched)="store.dispatch(workflowTransitionPatched($event))"
             (transitionRemoved)="store.dispatch(workflowTransitionRemoved({ index: $event }))"
             (workflowSaved)="saveWorkflow()"
+            (ticketRestored)="store.dispatch(ticketRestoreRequested({ ticketId: $event }))"
+            (activityHookCreated)="store.dispatch(activityHookCreateRequested({ request: $event }))"
+            (activityHookUpdated)="store.dispatch(activityHookUpdateRequested($event))"
+            (activityHookDeleted)="store.dispatch(activityHookDeleteRequested({ hookId: $event }))"
             (savedFilterCreated)="createSavedFilter($event)"
             (savedFilterApplied)="store.dispatch(savedTicketFilterApplied({ filter: $event }))"
             (savedFilterRenamed)="renameSavedFilter($event)"
@@ -207,6 +212,7 @@ export class WorkspacePageComponent {
   protected readonly logoutRequested = QueueActions.logoutRequested;
   protected readonly detailClosed = QueueActions.detailClosed;
   protected readonly commentCreateRequested = QueueActions.commentCreateRequested;
+  protected readonly ticketCommitmentRequested = QueueActions.ticketCommitmentRequested;
   protected readonly projectCreateRequested = QueueActions.projectCreateRequested;
   protected readonly userCreateRequested = QueueActions.userCreateRequested;
   protected readonly userUpdateRequested = QueueActions.userUpdateRequested;
@@ -221,9 +227,13 @@ export class WorkspacePageComponent {
   protected readonly ticketDialogClosed = QueueActions.ticketDialogClosed;
   protected readonly ticketDialogSaved = QueueActions.ticketDialogSaved;
   protected readonly ticketDeleteRequested = QueueActions.ticketDeleteRequested;
+  protected readonly ticketRestoreRequested = QueueActions.ticketRestoreRequested;
   protected readonly ticketsBulkUpdateRequested = QueueActions.ticketsBulkUpdateRequested;
   protected readonly savedTicketFilterApplied = QueueActions.savedTicketFilterApplied;
   protected readonly savedTicketFilterDeleteRequested = QueueActions.savedTicketFilterDeleteRequested;
+  protected readonly activityHookCreateRequested = QueueActions.activityHookCreateRequested;
+  protected readonly activityHookUpdateRequested = QueueActions.activityHookUpdateRequested;
+  protected readonly activityHookDeleteRequested = QueueActions.activityHookDeleteRequested;
   protected readonly toastCleared = QueueActions.toastCleared;
   protected readonly Boolean = Boolean;
 

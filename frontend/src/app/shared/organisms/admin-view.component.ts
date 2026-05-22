@@ -1,6 +1,8 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import {ChangeDetectionStrategy, Component, input, output} from '@angular/core';
 
 import {
+  ActivityHook,
+  CreateActivityHookRequest,
   CreateProjectRequest,
   CreateTicketTypeRequest,
   CreateUserRequest,
@@ -8,18 +10,28 @@ import {
   PublicUser,
   Ticket,
   TicketType,
+  UpdateActivityHookRequest,
   Workflow
 } from '../../core/api.models';
-import { WorkflowStatusPatch, WorkflowTransitionPatch } from '../../state/queue.models';
-import { AdminProjectsPanelComponent } from './admin-projects-panel.component';
-import { AdminTicketTypesPanelComponent } from './admin-ticket-types-panel.component';
-import { AdminUsersPanelComponent } from './admin-users-panel.component';
-import { AdminWorkflowPanelComponent } from './admin-workflow-panel.component';
+import {WorkflowStatusPatch, WorkflowTransitionPatch} from '../../state/queue.models';
+import {AdminProjectsPanelComponent} from './admin-projects-panel.component';
+import {AdminTicketTypesPanelComponent} from './admin-ticket-types-panel.component';
+import {AdminActivityHooksPanelComponent} from './admin-activity-hooks-panel.component';
+import {AdminDeletedTicketsPanelComponent} from './admin-deleted-tickets-panel.component';
+import {AdminUsersPanelComponent} from './admin-users-panel.component';
+import {AdminWorkflowPanelComponent} from './admin-workflow-panel.component';
 
 @Component({
   selector: 'qd-admin-view',
   standalone: true,
-  imports: [AdminProjectsPanelComponent, AdminTicketTypesPanelComponent, AdminUsersPanelComponent, AdminWorkflowPanelComponent],
+  imports: [
+    AdminActivityHooksPanelComponent,
+    AdminDeletedTicketsPanelComponent,
+    AdminProjectsPanelComponent,
+    AdminTicketTypesPanelComponent,
+    AdminUsersPanelComponent,
+    AdminWorkflowPanelComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="admin-grid">
@@ -46,6 +58,14 @@ import { AdminWorkflowPanelComponent } from './admin-workflow-panel.component';
         (transitionPatched)="transitionPatched.emit($event)"
         (transitionRemoved)="transitionRemoved.emit($event)"
         (workflowSaved)="workflowSaved.emit($event)" />
+      <qd-admin-deleted-tickets-panel
+        [tickets]="deletedTickets()"
+        (ticketRestored)="ticketRestored.emit($event)" />
+      <qd-admin-activity-hooks-panel
+        [hooks]="activityHooks()"
+        (hookCreated)="activityHookCreated.emit($event)"
+        (hookUpdated)="activityHookUpdated.emit($event)"
+        (hookDeleted)="activityHookDeleted.emit($event)" />
     </div>
   `
 })
@@ -53,6 +73,8 @@ export class AdminViewComponent {
   readonly projects = input<Project[]>([]);
   readonly selectedProject = input<Project | null>(null);
   readonly tickets = input<Ticket[]>([]);
+  readonly deletedTickets = input<Ticket[]>([]);
+  readonly activityHooks = input<ActivityHook[]>([]);
   readonly users = input<PublicUser[]>([]);
   readonly projectTypes = input<TicketType[]>([]);
   readonly workflowDraft = input<Workflow | null>(null);
@@ -70,4 +92,8 @@ export class AdminViewComponent {
   readonly transitionPatched = output<WorkflowTransitionPatch>();
   readonly transitionRemoved = output<number>();
   readonly workflowSaved = output<Workflow>();
+  readonly ticketRestored = output<string>();
+  readonly activityHookCreated = output<CreateActivityHookRequest>();
+  readonly activityHookUpdated = output<{ hookId: string; request: UpdateActivityHookRequest }>();
+  readonly activityHookDeleted = output<string>();
 }

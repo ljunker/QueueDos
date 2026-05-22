@@ -71,12 +71,15 @@ export interface Ticket {
   typeId: string;
   priority: Priority;
   assigneeId: string | null;
+  committedUserIds: string[];
   labels: string[];
   dueDate: string | null;
   estimate: number | null;
   reporterId: string;
   createdAt: string;
   updatedAt: string;
+  deletedAt: string | null;
+  deletedById: string | null;
 }
 
 export interface TicketComment {
@@ -132,6 +135,28 @@ export interface LoginResponse {
   user: PublicUser;
 }
 
+export interface AuthConfigResponse {
+  microsoftEnabled: boolean;
+}
+
+export type ActivityEventType =
+    | 'TICKET_CREATED'
+    | 'TICKET_UPDATED'
+    | 'TICKET_MOVED'
+    | 'COMMENT_ADDED'
+    | 'COMMITMENT_CHANGED'
+    | 'TICKET_DELETED'
+    | 'TICKET_RESTORED';
+
+export interface ActivityHook {
+  id: string;
+  organizationId: string;
+  eventType: ActivityEventType;
+  webhookUrl: string;
+  messageTemplate: string;
+  active: boolean;
+}
+
 export interface BootstrapResponse {
   currentUser: PublicUser;
   organizations: Organization[];
@@ -140,9 +165,11 @@ export interface BootstrapResponse {
   ticketTypes: TicketType[];
   workflows: Workflow[];
   tickets: Ticket[];
+  deletedTickets: Ticket[];
   comments: TicketComment[];
   ticketChanges: TicketChange[];
   savedTicketFilters: SavedTicketFilter[];
+  activityHooks: ActivityHook[];
   priorities: Priority[];
 }
 
@@ -154,6 +181,10 @@ export interface TicketDetailResponse {
 
 export interface CreateTicketCommentRequest {
   body: string;
+}
+
+export interface SaveTicketCommitmentRequest {
+  committed: boolean;
 }
 
 export interface CreateProjectRequest {
@@ -248,4 +279,18 @@ export interface CreateSavedTicketFilterRequest {
 export interface UpdateSavedTicketFilterRequest {
   name?: string;
   filters?: SavedTicketFilterCriteria;
+}
+
+export interface CreateActivityHookRequest {
+  eventType: ActivityEventType;
+  webhookUrl: string;
+  messageTemplate: string;
+  active?: boolean;
+}
+
+export interface UpdateActivityHookRequest {
+  eventType?: ActivityEventType;
+  webhookUrl?: string;
+  messageTemplate?: string;
+  active?: boolean;
 }

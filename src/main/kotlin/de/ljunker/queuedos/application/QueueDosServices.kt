@@ -12,13 +12,15 @@ import java.util.*
 
 class QueueDosServices(
     val auth: AuthenticationService,
+    val microsoftSso: MicrosoftSsoService,
     val queries: WorkspaceQueryService,
     val projects: ProjectService,
     val users: UserService,
     val ticketTypes: TicketTypeService,
     val workflows: WorkflowService,
     val tickets: TicketService,
-    val savedTicketFilters: SavedTicketFilterService
+    val savedTicketFilters: SavedTicketFilterService,
+    val activityHooks: ActivityHookService
 )
 
 data class AuthenticatedUser(
@@ -48,6 +50,13 @@ class AuthenticationService(
             AuthenticatedUser(tokenCodec.createToken(authenticatedUser.id), authenticatedUser)
         }
 
+    fun loginMicrosoft(email: String): AuthenticatedUser =
+        transactions.inTransaction {
+            val user = repositories.users.findActiveByEmail(normalizeEmail(email))
+                ?: throw UnauthorizedFailure("Microsoft account is not linked to an active QueueDos user.")
+            AuthenticatedUser(tokenCodec.createToken(user.id), user)
+        }
+
     fun userByToken(token: String): User? =
         transactions.inTransaction {
             tokenCodec.userIdFromToken(token)?.let(repositories.users::findActiveById)
@@ -68,9 +77,19 @@ class WorkspaceQueryService(
                 ticketTypes = repositories.ticketTypes.listByOrganization(actor.organizationId),
                 workflows = repositories.workflows.listByOrganization(actor.organizationId),
                 tickets = repositories.tickets.listByOrganization(actor.organizationId),
+                deletedTickets = if (actor.role == Role.ADMIN) {
+                    repositories.tickets.listDeletedByOrganization(actor.organizationId)
+                } else {
+                    emptyList()
+                },
                 comments = repositories.tickets.comments(actor.organizationId),
                 changes = repositories.tickets.changes(actor.organizationId),
-                savedTicketFilters = repositories.savedTicketFilters.listForOwner(actor.organizationId, actor.id)
+                savedTicketFilters = repositories.savedTicketFilters.listForOwner(actor.organizationId, actor.id),
+                activityHooks = if (actor.role == Role.ADMIN) {
+                    repositories.activityHooks.listByOrganization(actor.organizationId)
+                } else {
+                    emptyList()
+                }
             )
         }
 
@@ -332,10 +351,11 @@ class WorkflowService(
 class TicketService(
     private val transactions: TransactionRunner,
     private val repositories: QueueRepositories,
+    private val activityNotifier: ActivityNotifier = NoOpActivityNotifier,
     private val transitionEvaluator: WorkflowTransitionEvaluator = WorkflowTransitionEvaluator()
 ) {
-    fun create(actor: User, command: CreateTicketCommand): Ticket =
-        transactions.inTransaction {
+    fun create(actor: User, command: CreateTicketCommand): Ticket {
+        val ticket = transactions.inTransaction {
             val project = repositories.projects.findByIdForUpdate(actor.organizationId, command.projectId)
                 ?: throw NotFoundFailure("Project not found.")
             if (project.archived) {
@@ -373,9 +393,12 @@ class TicketService(
             )
             ticket
         }
+        activityNotifier.publish(TicketActivity(ActivityEventType.TICKET_CREATED, ticket, actor))
+        return ticket
+    }
 
-    fun update(actor: User, ticketId: String, command: UpdateTicketCommand): Ticket =
-        transactions.inTransaction {
+    fun update(actor: User, ticketId: String, command: UpdateTicketCommand): Ticket {
+        val ticket = transactions.inTransaction {
             val current = requireTicket(actor, ticketId)
             val project = requireProject(actor, current.projectId)
             if (project.archived) {
@@ -403,6 +426,9 @@ class TicketService(
             repositories.tickets.insertChanges(ticketChanges(actor, current, updated, timestamp))
             updated
         }
+        activityNotifier.publish(TicketActivity(ActivityEventType.TICKET_UPDATED, ticket, actor))
+        return ticket
+    }
 
     fun bulkUpdate(actor: User, command: BulkUpdateTicketsCommand): List<Ticket> =
         transactions.inTransaction {
@@ -443,9 +469,11 @@ class TicketService(
             }
         }
 
-    fun transition(actor: User, ticketId: String, command: TransitionTicketCommand): Ticket =
-        transactions.inTransaction {
+    fun transition(actor: User, ticketId: String, command: TransitionTicketCommand): Ticket {
+        var previousStatusId = ""
+        val ticket = transactions.inTransaction {
             val current = requireTicket(actor, ticketId)
+            previousStatusId = current.statusId
             val project = requireProject(actor, current.projectId)
             if (project.archived) {
                 throw ConflictFailure("Archived project tickets cannot move.")
@@ -467,10 +495,23 @@ class TicketService(
                 )
             }
         }
+        if (previousStatusId != ticket.statusId) {
+            activityNotifier.publish(
+                TicketActivity(
+                    ActivityEventType.TICKET_MOVED,
+                    ticket,
+                    actor,
+                    mapOf("fromStatusId" to previousStatusId, "toStatusId" to ticket.statusId)
+                )
+            )
+        }
+        return ticket
+    }
 
-    fun addComment(actor: User, ticketId: String, command: AddTicketCommentCommand): TicketComment =
-        transactions.inTransaction {
-            val ticket = requireTicket(actor, ticketId)
+    fun addComment(actor: User, ticketId: String, command: AddTicketCommentCommand): TicketComment {
+        lateinit var ticket: Ticket
+        val comment = transactions.inTransaction {
+            ticket = requireTicket(actor, ticketId)
             val timestamp = now()
             TicketComment(
                 id = id("comment"),
@@ -486,13 +527,86 @@ class TicketService(
                 )
             }
         }
+        activityNotifier.publish(
+            TicketActivity(ActivityEventType.COMMENT_ADDED, ticket, actor, mapOf("comment" to comment.body))
+        )
+        return comment
+    }
 
     fun delete(actor: User, ticketId: String) {
-        transactions.inTransaction {
+        val ticket = transactions.inTransaction {
             AuthorizationPolicies.requireAdmin(actor)
             val current = requireTicket(actor, ticketId)
-            repositories.tickets.delete(current.id)
+            val timestamp = now()
+            current.copy(updatedAt = timestamp, deletedAt = timestamp, deletedById = actor.id).also { deleted ->
+                repositories.tickets.update(deleted)
+                repositories.tickets.insertChanges(
+                    listOf(ticketChange(actor, current, "deletedAt", null, timestamp, timestamp))
+                )
+            }
         }
+        activityNotifier.publish(TicketActivity(ActivityEventType.TICKET_DELETED, ticket, actor))
+    }
+
+    fun restore(actor: User, ticketId: String): Ticket {
+        val ticket = transactions.inTransaction {
+            AuthorizationPolicies.requireAdmin(actor)
+            val current = requireDeletedTicket(actor, ticketId)
+            val timestamp = now()
+            current.copy(updatedAt = timestamp, deletedAt = null, deletedById = null).also { restored ->
+                repositories.tickets.update(restored)
+                repositories.tickets.insertChanges(
+                    listOf(ticketChange(actor, restored, "deletedAt", current.deletedAt, null, timestamp))
+                )
+            }
+        }
+        activityNotifier.publish(TicketActivity(ActivityEventType.TICKET_RESTORED, ticket, actor))
+        return ticket
+    }
+
+    fun saveCommitment(actor: User, ticketId: String, command: SaveTicketCommitmentCommand): Ticket {
+        val ticket = transactions.inTransaction {
+            val current = requireTicket(actor, ticketId)
+            if (requireProject(actor, current.projectId).archived) {
+                throw ConflictFailure("Archived project tickets cannot be edited.")
+            }
+            if (command.committed == (actor.id in current.committedUserIds)) {
+                return@inTransaction current
+            }
+            val timestamp = now()
+            repositories.tickets.setCommitment(current.id, actor.id, command.committed)
+            val updated = current.copy(
+                committedUserIds = if (command.committed) {
+                    (current.committedUserIds + actor.id).distinct().sorted()
+                } else {
+                    current.committedUserIds - actor.id
+                },
+                updatedAt = timestamp
+            )
+            repositories.tickets.update(updated)
+            repositories.tickets.insertChanges(
+                listOf(
+                    ticketChange(
+                        actor,
+                        updated,
+                        "commitment",
+                        if (command.committed) null else actor.id,
+                        if (command.committed) actor.id else null,
+                        timestamp
+                    )
+                )
+            )
+            updated
+        }
+        activityNotifier.publish(
+            TicketActivity(
+                ActivityEventType.COMMITMENT_CHANGED,
+                ticket,
+                actor,
+                mapOf("commitment" to if (command.committed) "committed" else "left")
+            )
+        )
+        return ticket
     }
 
     private fun requireProject(actor: User, projectId: String): Project =
@@ -510,6 +624,10 @@ class TicketService(
     private fun requireTicket(actor: User, ticketId: String): Ticket =
         repositories.tickets.findById(actor.organizationId, ticketId)
             ?: throw NotFoundFailure("Ticket not found.")
+
+    private fun requireDeletedTicket(actor: User, ticketId: String): Ticket =
+        repositories.tickets.findDeletedById(actor.organizationId, ticketId)
+            ?: throw NotFoundFailure("Deleted ticket not found.")
 
     private fun requireTicketTypeForProject(actor: User, typeId: String, projectId: String): TicketType =
         repositories.ticketTypes.findForProject(actor.organizationId, projectId, typeId)

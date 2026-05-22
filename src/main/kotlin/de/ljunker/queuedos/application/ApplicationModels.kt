@@ -10,9 +10,11 @@ data class BootstrapData(
     val ticketTypes: List<TicketType>,
     val workflows: List<Workflow>,
     val tickets: List<Ticket>,
+    val deletedTickets: List<Ticket>,
     val comments: List<TicketComment>,
     val changes: List<TicketChange>,
-    val savedTicketFilters: List<SavedTicketFilter>
+    val savedTicketFilters: List<SavedTicketFilter>,
+    val activityHooks: List<ActivityHook>
 )
 
 data class TicketDetailData(
@@ -99,6 +101,22 @@ data class BulkUpdateTicketsCommand(
     val assigneeId: String?,
     val clearAssignee: Boolean,
     val priority: Priority?
+)
+
+data class SaveTicketCommitmentCommand(val committed: Boolean)
+
+data class CreateActivityHookCommand(
+    val eventType: ActivityEventType,
+    val webhookUrl: String,
+    val messageTemplate: String,
+    val active: Boolean
+)
+
+data class UpdateActivityHookCommand(
+    val eventType: ActivityEventType?,
+    val webhookUrl: String?,
+    val messageTemplate: String?,
+    val active: Boolean?
 )
 
 data class CreateSavedTicketFilterCommand(

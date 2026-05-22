@@ -73,6 +73,23 @@ button:disabled {
   opacity: 0.55;
 }
 
+.button-link {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.button-link:hover {
+  border-color: #aeb8c8;
+}
+
 input,
 select,
 textarea {
@@ -527,6 +544,15 @@ tr:hover {
   display: block;
   margin-top: 2px;
   color: var(--muted);
+}
+
+.hook-item {
+  align-items: start;
+}
+
+.hook-fields {
+  display: grid;
+  gap: 8px;
 }
 
 .workflow-editor {

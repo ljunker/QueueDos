@@ -1,13 +1,15 @@
-import { HttpClient } from '@angular/common/http';
-import { Injectable, inject } from '@angular/core';
+import {HttpClient} from '@angular/common/http';
+import {inject, Injectable} from '@angular/core';
 
 import {
+  AuthConfigResponse,
   BootstrapResponse,
   BulkUpdateTicketsRequest,
+  CreateActivityHookRequest,
+  CreateProjectRequest,
   CreateSavedTicketFilterRequest,
   CreateTicketCommentRequest,
   CreateTicketRequest,
-  CreateProjectRequest,
   CreateTicketTypeRequest,
   CreateUserRequest,
   LoginRequest,
@@ -16,12 +18,13 @@ import {
   SaveWorkflowRequest,
   Ticket,
   TicketComment,
-  TicketType,
   TicketDetailResponse,
+  TicketType,
   TransitionTicketRequest,
+  UpdateActivityHookRequest,
   UpdateSavedTicketFilterRequest,
-  UpdateUserRequest,
-  UpdateTicketRequest
+  UpdateTicketRequest,
+  UpdateUserRequest
 } from './api.models';
 
 @Injectable({ providedIn: 'root' })
@@ -30,6 +33,10 @@ export class ApiClientService {
 
   login(request: LoginRequest) {
     return this.http.post<LoginResponse>('/api/auth/login', request);
+  }
+
+  authConfig() {
+    return this.http.get<AuthConfigResponse>('/api/auth/config');
   }
 
   bootstrap() {
@@ -60,8 +67,16 @@ export class ApiClientService {
     return this.http.post<TicketComment>(`/api/tickets/${id}/comments`, request);
   }
 
+  saveCommitment(id: string, committed: boolean) {
+    return this.http.post<Ticket>(`/api/tickets/${id}/commitment`, {committed});
+  }
+
   deleteTicket(id: string) {
     return this.http.delete<void>(`/api/tickets/${id}`);
+  }
+
+  restoreTicket(id: string) {
+    return this.http.post<Ticket>(`/api/tickets/${id}/restore`, {});
   }
 
   createProject(request: CreateProjectRequest) {
@@ -98,5 +113,17 @@ export class ApiClientService {
 
   deleteSavedTicketFilter(id: string) {
     return this.http.delete<void>(`/api/saved-ticket-filters/${id}`);
+  }
+
+  createActivityHook(request: CreateActivityHookRequest) {
+    return this.http.post('/api/activity-hooks', request);
+  }
+
+  updateActivityHook(id: string, request: UpdateActivityHookRequest) {
+    return this.http.put(`/api/activity-hooks/${id}`, request);
+  }
+
+  deleteActivityHook(id: string) {
+    return this.http.delete<void>(`/api/activity-hooks/${id}`);
   }
 }

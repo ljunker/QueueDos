@@ -312,8 +312,81 @@ class QueueDosServicesTest {
         assertEquals(beforeInvalid, services.queries.bootstrap(admin).tickets.filter { it.id in ticketIds })
     }
 
+    @Test
+    fun usersCanCommitAndAdminsCanRestoreDeletedTickets() {
+        val services = newServices()
+        val admin = admin(services)
+        val member = services.auth.login(LoginCommand("member@queuedos.local", "member")).user
+        val ticket = services.queries.bootstrap(admin).tickets.first()
+
+        val committed = services.tickets.saveCommitment(member, ticket.id, SaveTicketCommitmentCommand(true))
+        services.tickets.delete(admin, ticket.id)
+
+        assertTrue(member.id in committed.committedUserIds)
+        assertTrue(services.queries.bootstrap(admin).tickets.none { it.id == ticket.id })
+        assertEquals(ticket.id, services.queries.bootstrap(admin).deletedTickets.single { it.id == ticket.id }.id)
+        assertTrue(services.queries.bootstrap(member).deletedTickets.isEmpty())
+
+        val restored = services.tickets.restore(admin, ticket.id)
+        assertEquals(ticket.id, restored.id)
+        assertTrue(services.queries.ticketDetail(admin, ticket.id).changes.any { it.field == "deletedAt" })
+    }
+
+    @Test
+    fun slackActivityHooksRenderConfiguredMessagesAfterComments() {
+        val sender = RecordingSlackSender()
+        val services = PostgresTestBackend.create(slackSender = sender).backend.services
+        val admin = admin(services)
+        val ticket = services.queries.bootstrap(admin).tickets.first()
+
+        services.activityHooks.create(
+            admin,
+            CreateActivityHookCommand(
+                ActivityEventType.COMMENT_ADDED,
+                "https://hooks.slack.com/services/test",
+                "{{actorName}} commented on {{ticketKey}}: {{comment}}",
+                active = true
+            )
+        )
+        services.tickets.addComment(admin, ticket.id, AddTicketCommentCommand("Ready for review."))
+
+        assertEquals(
+            listOf("https://hooks.slack.com/services/test" to "QueueDos Admin commented on QDOS-1: Ready for review."),
+            sender.messages
+        )
+    }
+
+    @Test
+    fun microsoftSsoAuthenticatesExistingActiveUsers() {
+        val backend = QueueDosBackend.create(
+            PostgresTestBackend.freshDataSource(),
+            de.ljunker.queuedos.config.appJson,
+            AuthTokenCodec("microsoft-test-secret-that-is-long-enough"),
+            microsoftSsoSettings = MicrosoftSsoSettings("client", "secret", "http://localhost/callback"),
+            microsoftIdentityClient = object : MicrosoftIdentityClient {
+                override fun authorizationUrl(state: String, codeChallenge: String): String =
+                    "https://login.example/$state"
+
+                override fun userInfo(code: String, codeVerifier: String): MicrosoftUserInfo =
+                    MicrosoftUserInfo("member@queuedos.local", "QueueDos Member")
+            }
+        )
+
+        val authenticated = backend.services.microsoftSso.login("code", "verifier")
+
+        assertEquals("user-member", authenticated.user.id)
+    }
+
     private fun newServices(): QueueDosServices = PostgresTestBackend.create().backend.services
 
     private fun admin(services: QueueDosServices) =
         services.auth.login(LoginCommand("admin@queuedos.local", "admin")).user
+
+    private class RecordingSlackSender : SlackMessageSender {
+        val messages = mutableListOf<Pair<String, String>>()
+
+        override fun send(webhookUrl: String, text: String) {
+            messages += webhookUrl to text
+        }
+    }
 }

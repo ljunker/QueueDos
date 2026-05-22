@@ -5,6 +5,7 @@ import de.ljunker.queuedos.application.ConflictFailure
 import de.ljunker.queuedos.domain.Ticket
 import de.ljunker.queuedos.domain.WorkflowStatus
 import de.ljunker.queuedos.domain.WorkflowTransition
+import java.net.URI
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import java.util.*
@@ -78,6 +79,23 @@ internal fun normalizeEstimate(value: Int?): Int? {
         throw BadRequestFailure("Estimate must be between 0 and 999.")
     }
     return value
+}
+
+internal fun normalizeWebhookUrl(value: String): String {
+    val url = value.trim()
+    val uri = runCatching { URI(url) }.getOrNull()
+    if (uri?.scheme != "https" || uri.host.isNullOrBlank() || url.length > 1000) {
+        throw BadRequestFailure("Slack webhook URL must be an HTTPS URL.")
+    }
+    return url
+}
+
+internal fun normalizeActivityTemplate(value: String): String {
+    val template = value.trim()
+    if (template.isBlank() || template.length > 1000) {
+        throw BadRequestFailure("Activity message is required and must be 1000 characters or fewer.")
+    }
+    return template
 }
 
 internal fun normalizeStatuses(

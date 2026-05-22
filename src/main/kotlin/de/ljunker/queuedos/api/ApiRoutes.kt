@@ -1,8 +1,6 @@
 package de.ljunker.queuedos.api
 
-import de.ljunker.queuedos.application.BadRequestFailure
-import de.ljunker.queuedos.application.NotFoundFailure
-import de.ljunker.queuedos.application.QueueDosServices
+import de.ljunker.queuedos.application.*
 import de.ljunker.queuedos.domain.Priority
 import io.ktor.http.*
 import io.ktor.server.application.*
@@ -23,6 +21,37 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
 
         post("/api/auth/login") {
             call.respond(services.auth.login(call.receive<LoginRequest>().toCommand()).toResponse())
+        }
+
+        get("/api/auth/config") {
+            call.respond(AuthConfigResponse(microsoftEnabled = services.microsoftSso.enabled))
+        }
+
+        get("/api/auth/microsoft/start") {
+            val state = oauthSecret()
+            val verifier = oauthSecret()
+            call.authCookie(MICROSOFT_STATE_COOKIE, state)
+            call.authCookie(MICROSOFT_VERIFIER_COOKIE, verifier)
+            call.respondRedirect(services.microsoftSso.authorizationUrl(state, pkceChallenge(verifier)))
+        }
+
+        get("/api/auth/microsoft/callback") {
+            val state = call.request.queryParameters["state"]
+            val expectedState = call.request.cookies[MICROSOFT_STATE_COOKIE]
+            val verifier = call.request.cookies[MICROSOFT_VERIFIER_COOKIE]
+            val code = call.request.queryParameters["code"]
+            call.expireAuthCookie(MICROSOFT_STATE_COOKIE)
+            call.expireAuthCookie(MICROSOFT_VERIFIER_COOKIE)
+            if (
+                call.request.queryParameters["error"] != null ||
+                code.isNullOrBlank() ||
+                verifier.isNullOrBlank() ||
+                state.isNullOrBlank() ||
+                state != expectedState
+            ) {
+                throw BadRequestFailure("Microsoft sign-in callback is invalid.")
+            }
+            call.respondRedirect("/login#microsoftToken=${services.microsoftSso.login(code, verifier).token}")
         }
 
         authenticated {
@@ -97,9 +126,23 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
+            post("/api/tickets/{id}/commitment") {
+                call.respond(
+                    services.tickets.saveCommitment(
+                        call.actor(),
+                        call.pathId(),
+                        call.receive<SaveTicketCommitmentRequest>().toCommand()
+                    ).toResponse()
+                )
+            }
+
             delete("/api/tickets/{id}") {
                 services.tickets.delete(call.actor(), call.pathId())
                 call.respond(HttpStatusCode.NoContent)
+            }
+
+            post("/api/tickets/{id}/restore") {
+                call.respond(services.tickets.restore(call.actor(), call.pathId()).toResponse())
             }
 
             post("/api/projects") {
@@ -192,6 +235,29 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 services.savedTicketFilters.delete(call.actor(), call.pathId())
                 call.respond(HttpStatusCode.NoContent)
             }
+
+            post("/api/activity-hooks") {
+                call.respond(
+                    HttpStatusCode.Created,
+                    services.activityHooks.create(call.actor(), call.receive<CreateActivityHookRequest>().toCommand())
+                        .toResponse()
+                )
+            }
+
+            put("/api/activity-hooks/{id}") {
+                call.respond(
+                    services.activityHooks.update(
+                        call.actor(),
+                        call.pathId(),
+                        call.receive<UpdateActivityHookRequest>().toCommand()
+                    ).toResponse()
+                )
+            }
+
+            delete("/api/activity-hooks/{id}") {
+                services.activityHooks.delete(call.actor(), call.pathId())
+                call.respond(HttpStatusCode.NoContent)
+            }
         }
 
         get("/{assetPath...}") {
@@ -208,6 +274,35 @@ private fun parsePriority(value: String): Priority =
     runCatching { Priority.valueOf(value.uppercase()) }.getOrElse {
         throw BadRequestFailure("Unknown priority.")
     }
+
+private const val MICROSOFT_STATE_COOKIE = "queuedosMicrosoftState"
+private const val MICROSOFT_VERIFIER_COOKIE = "queuedosMicrosoftVerifier"
+
+private fun ApplicationCall.authCookie(name: String, value: String) {
+    response.cookies.append(
+        Cookie(
+            name = name,
+            value = value,
+            maxAge = 600,
+            path = "/api/auth/microsoft",
+            httpOnly = true,
+            extensions = mapOf("SameSite" to "Lax")
+        )
+    )
+}
+
+private fun ApplicationCall.expireAuthCookie(name: String) {
+    response.cookies.append(
+        Cookie(
+            name = name,
+            value = "",
+            maxAge = 0,
+            path = "/api/auth/microsoft",
+            httpOnly = true,
+            extensions = mapOf("SameSite" to "Lax")
+        )
+    )
+}
 
 private suspend fun ApplicationCall.respondFrontendAsset(path: String) {
     val normalized = path.trim('/').ifBlank { "index.html" }

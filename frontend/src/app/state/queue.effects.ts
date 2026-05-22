@@ -143,6 +143,33 @@ export class QueueEffects {
     )
   );
 
+  readonly restoreTicket$ = createEffect(() =>
+      this.actions$.pipe(
+          ofType(QueueActions.ticketRestoreRequested),
+          concatMap(({ticketId}) =>
+              this.api.restoreTicket(ticketId).pipe(
+                  map((ticket) => QueueActions.mutationSucceeded({
+                    message: 'Ticket restored.',
+                    focusTicketId: ticket.id
+                  })),
+                  catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Ticket could not be restored.')})))
+              )
+          )
+      )
+  );
+
+  readonly saveCommitment$ = createEffect(() =>
+      this.actions$.pipe(
+          ofType(QueueActions.ticketCommitmentRequested),
+          concatMap(({ticketId, committed}) =>
+              this.api.saveCommitment(ticketId, committed).pipe(
+                  map(() => QueueActions.mutationSucceeded({focusTicketId: ticketId})),
+                  catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Commitment could not be saved.')})))
+        )
+      )
+    )
+  );
+
   readonly bulkUpdateTickets$ = createEffect(() =>
     this.actions$.pipe(
       ofType(QueueActions.ticketsBulkUpdateRequested),
@@ -287,6 +314,42 @@ export class QueueEffects {
         )
       )
     )
+  );
+
+  readonly createActivityHook$ = createEffect(() =>
+      this.actions$.pipe(
+          ofType(QueueActions.activityHookCreateRequested),
+          concatMap(({request}) =>
+              this.api.createActivityHook(request).pipe(
+                  map(() => QueueActions.mutationSucceeded({message: 'Slack hook saved.'})),
+                  catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Slack hook could not be saved.')})))
+              )
+          )
+      )
+  );
+
+  readonly updateActivityHook$ = createEffect(() =>
+      this.actions$.pipe(
+          ofType(QueueActions.activityHookUpdateRequested),
+          concatMap(({hookId, request}) =>
+              this.api.updateActivityHook(hookId, request).pipe(
+                  map(() => QueueActions.mutationSucceeded({message: 'Slack hook updated.'})),
+                  catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Slack hook could not be updated.')})))
+              )
+          )
+      )
+  );
+
+  readonly deleteActivityHook$ = createEffect(() =>
+      this.actions$.pipe(
+          ofType(QueueActions.activityHookDeleteRequested),
+          concatMap(({hookId}) =>
+              this.api.deleteActivityHook(hookId).pipe(
+                  map(() => QueueActions.mutationSucceeded({message: 'Slack hook deleted.'})),
+                  catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Slack hook could not be deleted.')})))
+              )
+          )
+      )
   );
 
   readonly reloadAfterMutation$ = createEffect(() =>

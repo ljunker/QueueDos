@@ -46,3 +46,12 @@
 - Import und Export für Tickets.
 - Webhooks für Statuswechsel.
 - Benachrichtigungen per E-Mail oder In-App.
+
+## Anforderungen
+
+- [x] Login per Microsoft-Account (Single Sign On)
+- [x] Sichtbarkeit von Bewegungen auf dem Board und in Tickets (slack hooks sind dafür geeignet. für jedes event wie "
+  kommentar", "spalte verschoben" oder so muss eine nachricht konfigurierbar sein)
+- [x] irgendwie muss man sich zu einem ticket committen können. Dafür muss eine gruppe user sich eintragen können auf
+  das ticket, außer dem assignee.
+- [x] gelöschte tickets wiederherstellen können

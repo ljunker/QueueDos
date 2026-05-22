@@ -17,18 +17,19 @@ Vordefinierte Nutzer:
 
 ## MVP-Umfang
 
-- Anmeldung mit E-Mail und Passwort, vorbereitet für spätere OAuth- oder SSO-Anbindung.
+- Anmeldung mit E-Mail/Passwort oder optionalem Microsoft-SSO für vorhandene aktive Nutzer.
 - Eine sichtbare Organisation mit mehreren Projekten.
 - Projektbezogene Ticketschlüssel wie `QDOS-1`.
 - Konfigurierbare Tickettypen.
 - Konfigurierbare Workflows mit Status, Übergängen, Rollenbeschränkungen und Metadaten für Pflichtfelder.
 - Tickets mit Titel, Beschreibung, Status, Typ, Priorität, verantwortlicher Person, Labels, Fälligkeitsdatum, Schätzung und meldender Person.
-- Ticket-Detailansicht mit Kommentaren und Änderungshistorie.
+- Ticket-Detailansicht mit Kommentaren, Änderungshistorie und Ticket-Commitments zusätzlich zur verantwortlichen Person.
 - Kanban-Board mit Drag-and-Drop.
 - Projekt-Dashboard mit Drilldown in gefilterte Ticketlisten.
 - Ticketliste mit Suche, Filtern, Sortierung, URL-Zustand, privaten gespeicherten Filtern und Bulk-Aktionen.
 - Persönliche projektübergreifende Ansicht für eigene Tickets.
-- Admin-Oberflächen für Nutzer, Projekte, Tickettypen und Workflows.
+- Admin-Oberflächen für Nutzer, Projekte, Tickettypen, Workflows, wiederherstellbare gelöschte Tickets und
+  Slack-Activity-Hooks.
 
 Das Docker-Compose-Setup startet PostgreSQL und speichert QueueDos-Daten in relationalen Tabellen für Organisationen,
 Nutzer, Projekte, Tickettypen, Workflows, Workflow-Status, Workflow-Übergänge und Tickets. Flyway versioniert das
@@ -41,9 +42,19 @@ Wichtige Umgebungsvariablen:
 - `QUEUEDOS_DATABASE_USER` / `QUEUEDOS_DATABASE_PASSWORD`: PostgreSQL-Zugangsdaten.
 - `QUEUEDOS_SESSION_SECRET`: gemeinsamer HMAC-Schlüssel für stateless Session-Tokens.
 - `QUEUEDOS_SESSION_TTL_HOURS`: Token-Laufzeit in Stunden, Standard `12`.
+- `QUEUEDOS_PUBLIC_BASE_URL`: öffentliche Basis-URL für Microsoft-SSO-Redirects, z. B. `http://localhost:8080`.
+- `QUEUEDOS_MICROSOFT_CLIENT_ID` / `QUEUEDOS_MICROSOFT_CLIENT_SECRET`: aktivieren Microsoft-SSO.
+- `QUEUEDOS_MICROSOFT_TENANT`: Entra-Tenant für Microsoft-SSO, Standard `common`.
+- `QUEUEDOS_MICROSOFT_REDIRECT_URI`: optionaler expliziter Microsoft-Callback-Redirect; Standard ist
+  `${QUEUEDOS_PUBLIC_BASE_URL}/api/auth/microsoft/callback`.
 
 Ohne `QUEUEDOS_DATABASE_URL` startet die Anwendung nicht. Bestehende Daten aus dem früheren PostgreSQL-Snapshot
 `queuedos_state` werden beim ersten Flyway-Lauf in die relationalen Tabellen migriert.
+
+Microsoft-SSO verknüpft keine neuen QueueDos-Nutzer automatisch. Die von Microsoft gelieferte E-Mail muss einem
+aktiven Nutzer in QueueDos entsprechen. Slack-Hooks werden im Admin-Bereich pro Activity-Ereignis konfiguriert; eine
+Vorlage kann Platzhalter wie `{{actorName}}`, `{{ticketKey}}`, `{{ticketTitle}}`, `{{comment}}`,
+`{{fromStatusId}}` oder `{{toStatusId}}` verwenden.
 
 ## Zustandsprüfung
 

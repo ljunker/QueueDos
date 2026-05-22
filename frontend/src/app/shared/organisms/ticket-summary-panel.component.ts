@@ -1,8 +1,8 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import {ChangeDetectionStrategy, Component, input, output} from '@angular/core';
 
-import { PublicUser, Ticket, TicketType, Workflow } from '../../core/api.models';
-import { priorityLabel, statusById, typeById, userById } from '../../state/queue.selectors';
-import { BadgeComponent } from '../atoms/badge.component';
+import {PublicUser, Ticket, TicketType, Workflow} from '../../core/api.models';
+import {priorityLabel, statusById, typeById, userById} from '../../state/queue.selectors';
+import {BadgeComponent} from '../atoms/badge.component';
 
 @Component({
   selector: 'qd-ticket-summary-panel',
@@ -40,7 +40,16 @@ import { BadgeComponent } from '../atoms/badge.component';
           <dt>Estimate</dt>
           <dd>{{ ticket().estimate ?? '-' }}</dd>
         </div>
+        <div>
+          <dt>Committed</dt>
+          <dd>{{ commitmentNames() || '-' }}</dd>
+        </div>
       </dl>
+      @if (currentUser(); as user) {
+        <button type="button" (click)="commitmentChanged.emit(!isCommitted(user.id))">
+          {{ isCommitted(user.id) ? 'Leave commitment' : 'Commit to ticket' }}
+        </button>
+      }
     </section>
   `
 })
@@ -49,6 +58,9 @@ export class TicketSummaryPanelComponent {
   readonly workflow = input<Workflow | null>(null);
   readonly types = input<TicketType[]>([]);
   readonly users = input<PublicUser[]>([]);
+  readonly currentUser = input<PublicUser | null>(null);
+
+  readonly commitmentChanged = output<boolean>();
 
   protected readonly priorityLabel = priorityLabel;
   protected readonly statusById = statusById;
@@ -57,5 +69,16 @@ export class TicketSummaryPanelComponent {
 
   protected priorityVariant(priority: Ticket['priority']): 'critical' | 'high' | 'medium' | 'low' {
     return priority.toLowerCase() as 'critical' | 'high' | 'medium' | 'low';
+  }
+
+  protected isCommitted(userId: string): boolean {
+    return this.ticket().committedUserIds.includes(userId);
+  }
+
+  protected commitmentNames(): string {
+    return this.ticket().committedUserIds
+    .map((userId) => userById(this.users(), userId)?.displayName ?? '')
+    .filter(Boolean)
+    .join(', ');
   }
 }

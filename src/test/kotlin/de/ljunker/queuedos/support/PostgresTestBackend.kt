@@ -1,6 +1,7 @@
 package de.ljunker.queuedos.support
 
 import de.ljunker.queuedos.application.QueueDosBackend
+import de.ljunker.queuedos.application.SlackMessageSender
 import de.ljunker.queuedos.config.appJson
 import de.ljunker.queuedos.persistence.DriverManagerDataSource
 import de.ljunker.queuedos.security.AuthTokenCodec
@@ -13,9 +14,19 @@ object PostgresTestBackend {
         start()
     }
 
-    fun create(tokenCodec: AuthTokenCodec = AuthTokenCodec("test-session-secret-that-is-long-enough")): TestBackend {
+    fun create(
+        tokenCodec: AuthTokenCodec = AuthTokenCodec("test-session-secret-that-is-long-enough"),
+        slackSender: SlackMessageSender? = null
+    ): TestBackend {
         val dataSource = freshDataSource()
-        return TestBackend(dataSource, QueueDosBackend.create(dataSource, appJson, tokenCodec))
+        return TestBackend(
+            dataSource,
+            if (slackSender == null) {
+                QueueDosBackend.create(dataSource, appJson, tokenCodec)
+            } else {
+                QueueDosBackend.create(dataSource, appJson, tokenCodec, slackSender = slackSender)
+            }
+        )
     }
 
     fun freshDataSource(): DataSource =

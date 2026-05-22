@@ -48,14 +48,25 @@ interface WorkflowRepository {
 
 interface TicketRepository {
     fun listByOrganization(organizationId: String): List<Ticket>
+    fun listDeletedByOrganization(organizationId: String): List<Ticket>
     fun findById(organizationId: String, ticketId: String): Ticket?
+    fun findDeletedById(organizationId: String, ticketId: String): Ticket?
     fun insert(ticket: Ticket)
     fun update(ticket: Ticket)
-    fun delete(ticketId: String)
+    fun setCommitment(ticketId: String, userId: String, committed: Boolean)
     fun comments(organizationId: String, ticketId: String? = null): List<TicketComment>
     fun changes(organizationId: String, ticketId: String? = null): List<TicketChange>
     fun insertComment(comment: TicketComment)
     fun insertChanges(changes: List<TicketChange>)
+}
+
+interface ActivityHookRepository {
+    fun listByOrganization(organizationId: String): List<ActivityHook>
+    fun listActive(organizationId: String, eventType: ActivityEventType): List<ActivityHook>
+    fun findById(organizationId: String, hookId: String): ActivityHook?
+    fun insert(hook: ActivityHook)
+    fun update(hook: ActivityHook)
+    fun delete(hookId: String)
 }
 
 interface SavedTicketFilterRepository {
@@ -82,5 +93,6 @@ data class QueueRepositories(
     val ticketTypes: TicketTypeRepository,
     val workflows: WorkflowRepository,
     val tickets: TicketRepository,
-    val savedTicketFilters: SavedTicketFilterRepository
+    val savedTicketFilters: SavedTicketFilterRepository,
+    val activityHooks: ActivityHookRepository
 )

@@ -23,6 +23,11 @@ data class LoginResponse(
 )
 
 @Serializable
+data class AuthConfigResponse(
+    val microsoftEnabled: Boolean
+)
+
+@Serializable
 data class BootstrapResponse(
     val currentUser: UserResponse,
     val organizations: List<OrganizationResponse>,
@@ -31,9 +36,11 @@ data class BootstrapResponse(
     val ticketTypes: List<TicketTypeResponse>,
     val workflows: List<WorkflowResponse>,
     val tickets: List<TicketResponse>,
+    val deletedTickets: List<TicketResponse> = emptyList(),
     val comments: List<TicketCommentResponse> = emptyList(),
     val ticketChanges: List<TicketChangeResponse> = emptyList(),
     val savedTicketFilters: List<SavedTicketFilterResponse> = emptyList(),
+    val activityHooks: List<ActivityHookResponse> = emptyList(),
     val priorities: List<Priority> = Priority.entries.toList()
 )
 
@@ -122,12 +129,15 @@ data class TicketResponse(
     val typeId: String,
     val priority: Priority,
     val assigneeId: String? = null,
+    val committedUserIds: List<String> = emptyList(),
     val labels: List<String> = emptyList(),
     val dueDate: String? = null,
     val estimate: Int? = null,
     val reporterId: String,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    val deletedAt: String? = null,
+    val deletedById: String? = null
 )
 
 @Serializable
@@ -173,6 +183,16 @@ data class SavedTicketFilterResponse(
     val view: SavedTicketFilterView,
     val projectId: String? = null,
     val filters: SavedTicketFilterCriteriaDto = SavedTicketFilterCriteriaDto()
+)
+
+@Serializable
+data class ActivityHookResponse(
+    val id: String,
+    val organizationId: String,
+    val eventType: de.ljunker.queuedos.domain.ActivityEventType,
+    val webhookUrl: String,
+    val messageTemplate: String,
+    val active: Boolean
 )
 
 @Serializable
@@ -260,6 +280,11 @@ data class CreateTicketCommentRequest(
 )
 
 @Serializable
+data class SaveTicketCommitmentRequest(
+    val committed: Boolean
+)
+
+@Serializable
 data class SaveWorkflowRequest(
     val statuses: List<WorkflowStatusDto>,
     val transitions: List<WorkflowTransitionDto>
@@ -285,4 +310,20 @@ data class BulkUpdateTicketsRequest(
     val assigneeId: String? = null,
     val clearAssignee: Boolean = false,
     val priority: Priority? = null
+)
+
+@Serializable
+data class CreateActivityHookRequest(
+    val eventType: de.ljunker.queuedos.domain.ActivityEventType,
+    val webhookUrl: String,
+    val messageTemplate: String,
+    val active: Boolean = true
+)
+
+@Serializable
+data class UpdateActivityHookRequest(
+    val eventType: de.ljunker.queuedos.domain.ActivityEventType? = null,
+    val webhookUrl: String? = null,
+    val messageTemplate: String? = null,
+    val active: Boolean? = null
 )

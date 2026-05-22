@@ -96,12 +96,15 @@ data class Ticket(
     val typeId: String,
     val priority: Priority,
     val assigneeId: String? = null,
+    val committedUserIds: List<String> = emptyList(),
     val labels: List<String> = emptyList(),
     val dueDate: String? = null,
     val estimate: Int? = null,
     val reporterId: String,
     val createdAt: String,
-    val updatedAt: String
+    val updatedAt: String,
+    val deletedAt: String? = null,
+    val deletedById: String? = null
 )
 
 @Serializable
@@ -156,6 +159,27 @@ data class SavedTicketFilter(
 )
 
 @Serializable
+enum class ActivityEventType {
+    TICKET_CREATED,
+    TICKET_UPDATED,
+    TICKET_MOVED,
+    COMMENT_ADDED,
+    COMMITMENT_CHANGED,
+    TICKET_DELETED,
+    TICKET_RESTORED
+}
+
+@Serializable
+data class ActivityHook(
+    val id: String,
+    val organizationId: String,
+    val eventType: ActivityEventType,
+    val webhookUrl: String,
+    val messageTemplate: String,
+    val active: Boolean = true
+)
+
+@Serializable
 data class AppData(
     val organizations: List<Organization> = emptyList(),
     val users: List<User> = emptyList(),
@@ -165,5 +189,6 @@ data class AppData(
     val tickets: List<Ticket> = emptyList(),
     val comments: List<TicketComment> = emptyList(),
     val ticketChanges: List<TicketChange> = emptyList(),
-    val savedTicketFilters: List<SavedTicketFilter> = emptyList()
+    val savedTicketFilters: List<SavedTicketFilter> = emptyList(),
+    val activityHooks: List<ActivityHook> = emptyList()
 )

@@ -127,6 +127,12 @@ class ApiRoutesTest {
         }.body<TicketCommentResponse>()
         assertEquals(ticket.id, comment.ticketId)
 
+        val committed = client.post("/api/tickets/${ticket.id}/commitment") {
+            auth(memberToken)
+            jsonBody(SaveTicketCommitmentRequest(true))
+        }.body<TicketResponse>()
+        assertEquals(listOf("user-member"), committed.committedUserIds)
+
         val detail = client.get("/api/tickets/${ticket.id}") {
             auth(adminToken)
         }.body<TicketDetailResponse>()
@@ -180,6 +186,38 @@ class ApiRoutesTest {
             auth(adminToken)
         }
         assertEquals(HttpStatusCode.NoContent, deleteSavedFilter.status)
+
+        val deletedTicket = client.delete("/api/tickets/${ticket.id}") {
+            auth(adminToken)
+        }
+        assertEquals(HttpStatusCode.NoContent, deletedTicket.status)
+        val deletedBootstrap = client.get("/api/bootstrap") { auth(adminToken) }.body<BootstrapResponse>()
+        assertEquals(ticket.id, deletedBootstrap.deletedTickets.single { it.id == ticket.id }.id)
+        val restored = client.post("/api/tickets/${ticket.id}/restore") {
+            auth(adminToken)
+        }.body<TicketResponse>()
+        assertEquals(ticket.id, restored.id)
+
+        val hook = client.post("/api/activity-hooks") {
+            auth(adminToken)
+            jsonBody(
+                CreateActivityHookRequest(
+                    eventType = de.ljunker.queuedos.domain.ActivityEventType.TICKET_CREATED,
+                    webhookUrl = "https://hooks.slack.com/services/example",
+                    messageTemplate = "{{actorName}} created {{ticketKey}}"
+                )
+            )
+        }.body<ActivityHookResponse>()
+        val pausedHook = client.put("/api/activity-hooks/${hook.id}") {
+            auth(adminToken)
+            jsonBody(UpdateActivityHookRequest(active = false))
+        }.body<ActivityHookResponse>()
+        assertEquals(false, pausedHook.active)
+        assertTrue(client.get("/api/bootstrap") { auth(memberToken) }.body<BootstrapResponse>().activityHooks.isEmpty())
+        assertEquals(
+            HttpStatusCode.NoContent,
+            client.delete("/api/activity-hooks/${hook.id}") { auth(adminToken) }.status
+        )
     }
 
     private suspend fun login(client: HttpClient, email: String, password: String): String =

@@ -20,7 +20,8 @@ class JdbcQueueRepositories(
             ticketTypes = JdbcTicketTypeRepository(transactionRunner),
             workflows = JdbcWorkflowRepository(transactionRunner),
             tickets = JdbcTicketRepository(transactionRunner),
-            savedTicketFilters = JdbcSavedTicketFilterRepository(transactionRunner, json)
+            savedTicketFilters = JdbcSavedTicketFilterRepository(transactionRunner, json),
+            activityHooks = JdbcActivityHookRepository(transactionRunner)
         )
 }
 
@@ -495,10 +496,24 @@ private class JdbcTicketRepository(
         connection().query(
             """
             SELECT id, organization_id, project_id, number, key, title, description, status_id, type_id,
-                   priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at
+                   priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at, deleted_at,
+                   deleted_by_id
             FROM queuedos_tickets
-            WHERE organization_id = ?
+            WHERE organization_id = ? AND deleted_at IS NULL
             ORDER BY project_id, number
+            """.trimIndent(),
+            organizationId
+        ) { ticket(it) }
+
+    override fun listDeletedByOrganization(organizationId: String): List<Ticket> =
+        connection().query(
+            """
+            SELECT id, organization_id, project_id, number, key, title, description, status_id, type_id,
+                   priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at, deleted_at,
+                   deleted_by_id
+            FROM queuedos_tickets
+            WHERE organization_id = ? AND deleted_at IS NOT NULL
+            ORDER BY deleted_at DESC, project_id, number
             """.trimIndent(),
             organizationId
         ) { ticket(it) }
@@ -507,9 +522,23 @@ private class JdbcTicketRepository(
         connection().queryOne(
             """
             SELECT id, organization_id, project_id, number, key, title, description, status_id, type_id,
-                   priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at
+                   priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at, deleted_at,
+                   deleted_by_id
             FROM queuedos_tickets
-            WHERE organization_id = ? AND id = ?
+            WHERE organization_id = ? AND id = ? AND deleted_at IS NULL
+            """.trimIndent(),
+            organizationId,
+            ticketId
+        ) { ticket(it) }
+
+    override fun findDeletedById(organizationId: String, ticketId: String): Ticket? =
+        connection().queryOne(
+            """
+            SELECT id, organization_id, project_id, number, key, title, description, status_id, type_id,
+                   priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at, deleted_at,
+                   deleted_by_id
+            FROM queuedos_tickets
+            WHERE organization_id = ? AND id = ? AND deleted_at IS NOT NULL
             """.trimIndent(),
             organizationId,
             ticketId
@@ -548,7 +577,7 @@ private class JdbcTicketRepository(
             """
             UPDATE queuedos_tickets
             SET title = ?, description = ?, status_id = ?, type_id = ?, priority = ?, assignee_id = ?,
-                due_date = ?, estimate = ?, updated_at = ?
+                due_date = ?, estimate = ?, updated_at = ?, deleted_at = ?, deleted_by_id = ?
             WHERE id = ? AND organization_id = ?
             """.trimIndent(),
             ticket.title,
@@ -560,14 +589,28 @@ private class JdbcTicketRepository(
             ticket.dueDate,
             ticket.estimate,
             ticket.updatedAt,
+            ticket.deletedAt,
+            ticket.deletedById,
             ticket.id,
             ticket.organizationId
         )
         replaceLabels(ticket)
     }
 
-    override fun delete(ticketId: String) {
-        connection().execute("DELETE FROM queuedos_tickets WHERE id = ?", ticketId)
+    override fun setCommitment(ticketId: String, userId: String, committed: Boolean) {
+        if (committed) {
+            connection().execute(
+                "INSERT INTO queuedos_ticket_commitments (ticket_id, user_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+                ticketId,
+                userId
+            )
+        } else {
+            connection().execute(
+                "DELETE FROM queuedos_ticket_commitments WHERE ticket_id = ? AND user_id = ?",
+                ticketId,
+                userId
+            )
+        }
     }
 
     override fun comments(organizationId: String, ticketId: String?): List<TicketComment> =
@@ -668,12 +711,15 @@ private class JdbcTicketRepository(
             typeId = result.getString("type_id"),
             priority = Priority.valueOf(result.getString("priority")),
             assigneeId = result.getString("assignee_id"),
+            committedUserIds = commitments(ticketId),
             labels = labels(ticketId),
             dueDate = result.getString("due_date"),
             estimate = result.getNullableInt("estimate"),
             reporterId = result.getString("reporter_id"),
             createdAt = result.getString("created_at"),
-            updatedAt = result.getString("updated_at")
+            updatedAt = result.getString("updated_at"),
+            deletedAt = result.getString("deleted_at"),
+            deletedById = result.getString("deleted_by_id")
         )
     }
 
@@ -682,6 +728,12 @@ private class JdbcTicketRepository(
             "SELECT label FROM queuedos_ticket_labels WHERE ticket_id = ? ORDER BY sort_order",
             ticketId
         ) { it.getString("label") }
+
+    private fun commitments(ticketId: String): List<String> =
+        connection().query(
+            "SELECT user_id FROM queuedos_ticket_commitments WHERE ticket_id = ? ORDER BY user_id",
+            ticketId
+        ) { it.getString("user_id") }
 
     private fun replaceLabels(ticket: Ticket) {
         connection().execute("DELETE FROM queuedos_ticket_labels WHERE ticket_id = ?", ticket.id)
@@ -793,6 +845,92 @@ private class JdbcSavedTicketFilterRepository(
             view = SavedTicketFilterView.valueOf(result.getString("view")),
             projectId = result.getString("project_id"),
             filters = json.decodeFromString<SavedTicketFilterCriteria>(result.getString("filters"))
+        )
+
+    private fun connection() = transactions.connection()
+}
+
+private class JdbcActivityHookRepository(
+    private val transactions: JdbcTransactionRunner
+) : ActivityHookRepository {
+    override fun listByOrganization(organizationId: String): List<ActivityHook> =
+        connection().query(
+            """
+            SELECT id, organization_id, event_type, webhook_url, message_template, active
+            FROM queuedos_activity_hooks
+            WHERE organization_id = ?
+            ORDER BY event_type, id
+            """.trimIndent(),
+            organizationId
+        ) { hook(it) }
+
+    override fun listActive(organizationId: String, eventType: ActivityEventType): List<ActivityHook> =
+        connection().query(
+            """
+            SELECT id, organization_id, event_type, webhook_url, message_template, active
+            FROM queuedos_activity_hooks
+            WHERE organization_id = ? AND event_type = ? AND active = true
+            ORDER BY id
+            """.trimIndent(),
+            organizationId,
+            eventType.name
+        ) { hook(it) }
+
+    override fun findById(organizationId: String, hookId: String): ActivityHook? =
+        connection().queryOne(
+            """
+            SELECT id, organization_id, event_type, webhook_url, message_template, active
+            FROM queuedos_activity_hooks
+            WHERE organization_id = ? AND id = ?
+            """.trimIndent(),
+            organizationId,
+            hookId
+        ) { hook(it) }
+
+    override fun insert(hook: ActivityHook) {
+        connection().execute(
+            """
+            INSERT INTO queuedos_activity_hooks
+                (id, organization_id, event_type, webhook_url, message_template, active)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+            hook.id,
+            hook.organizationId,
+            hook.eventType.name,
+            hook.webhookUrl,
+            hook.messageTemplate,
+            hook.active
+        )
+    }
+
+    override fun update(hook: ActivityHook) {
+        connection().execute(
+            """
+            UPDATE queuedos_activity_hooks
+            SET event_type = ?, webhook_url = ?, message_template = ?, active = ?
+            WHERE id = ? AND organization_id = ?
+            """.trimIndent(),
+            hook.eventType.name,
+            hook.webhookUrl,
+            hook.messageTemplate,
+            hook.active,
+            hook.id,
+            hook.organizationId
+        )
+    }
+
+    override fun delete(hookId: String) {
+        connection().execute("DELETE FROM queuedos_activity_hooks WHERE id = ?", hookId)
+    }
+
+    private fun hook(result: ResultSet): ActivityHook =
+        ActivityHook(
+            id = result.getString("id"),
+            organizationId = result.getString("organization_id"),
+            eventType = ActivityEventType.valueOf(result.getString("event_type")),
+            webhookUrl = result.getString("webhook_url"),
+            messageTemplate = result.getString("message_template"),
+            active = result.getBoolean("active")
         )
 
     private fun connection() = transactions.connection()

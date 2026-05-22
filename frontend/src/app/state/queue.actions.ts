@@ -1,10 +1,11 @@
-import { createActionGroup, emptyProps, props } from '@ngrx/store';
+import {createActionGroup, emptyProps, props} from '@ngrx/store';
 
 import {
   BootstrapResponse,
   BulkUpdateTicketsRequest,
-  CreateSavedTicketFilterRequest,
+  CreateActivityHookRequest,
   CreateProjectRequest,
+  CreateSavedTicketFilterRequest,
   CreateTicketCommentRequest,
   CreateTicketRequest,
   CreateTicketTypeRequest,
@@ -12,19 +13,19 @@ import {
   LoginRequest,
   LoginResponse,
   Project,
-  PublicUser,
   SavedTicketFilter,
   SaveWorkflowRequest,
   Ticket,
+  UpdateActivityHookRequest,
   UpdateSavedTicketFilterRequest,
   UpdateUserRequest
 } from '../core/api.models';
 import {
+  MyTicketsFilters,
   RouteWorkspaceState,
   TicketDialogSave,
   TicketDialogState,
   TicketFilters,
-  MyTicketsFilters,
   UpdateTicketWithTransition,
   WorkflowStatusPatch,
   WorkflowTransitionPatch,
@@ -61,6 +62,8 @@ export const QueueActions = createActionGroup({
     'Ticket Update Requested': props<UpdateTicketWithTransition>(),
     'Ticket Transition Requested': props<{ ticket: Ticket; toStatusId: string }>(),
     'Ticket Delete Requested': props<{ ticketId: string }>(),
+    'Ticket Restore Requested': props<{ ticketId: string }>(),
+    'Ticket Commitment Requested': props<{ ticketId: string; committed: boolean }>(),
     'Tickets Bulk Update Requested': props<{ request: BulkUpdateTicketsRequest }>(),
     'Comment Create Requested': props<{ ticketId: string; request: CreateTicketCommentRequest }>(),
 
@@ -74,6 +77,9 @@ export const QueueActions = createActionGroup({
     'Saved Ticket Filter Create Requested': props<{ request: CreateSavedTicketFilterRequest }>(),
     'Saved Ticket Filter Update Requested': props<{ filterId: string; request: UpdateSavedTicketFilterRequest }>(),
     'Saved Ticket Filter Delete Requested': props<{ filterId: string }>(),
+    'Activity Hook Create Requested': props<{ request: CreateActivityHookRequest }>(),
+    'Activity Hook Update Requested': props<{ hookId: string; request: UpdateActivityHookRequest }>(),
+    'Activity Hook Delete Requested': props<{ hookId: string }>(),
 
     'Mutation Succeeded': props<{ message?: string; focusTicketId?: string }>(),
     'Mutation Failed': props<{ error: string }>(),

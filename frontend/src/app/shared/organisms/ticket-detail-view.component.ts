@@ -1,9 +1,9 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import {ChangeDetectionStrategy, Component, input, output} from '@angular/core';
 
-import { PublicUser, Ticket, TicketChange, TicketComment, TicketType, Workflow } from '../../core/api.models';
-import { TicketCommentsPanelComponent } from './ticket-comments-panel.component';
-import { TicketHistoryPanelComponent } from './ticket-history-panel.component';
-import { TicketSummaryPanelComponent } from './ticket-summary-panel.component';
+import {PublicUser, Ticket, TicketChange, TicketComment, TicketType, Workflow} from '../../core/api.models';
+import {TicketCommentsPanelComponent} from './ticket-comments-panel.component';
+import {TicketHistoryPanelComponent} from './ticket-history-panel.component';
+import {TicketSummaryPanelComponent} from './ticket-summary-panel.component';
 
 @Component({
   selector: 'qd-ticket-detail-view',
@@ -23,7 +23,13 @@ import { TicketSummaryPanelComponent } from './ticket-summary-panel.component';
         </div>
 
         <div class="detail-grid">
-          <qd-ticket-summary-panel [ticket]="selectedTicket" [workflow]="workflow()" [types]="types()" [users]="users()" />
+          <qd-ticket-summary-panel
+            [ticket]="selectedTicket"
+            [workflow]="workflow()"
+            [types]="types()"
+            [users]="users()"
+            [currentUser]="currentUser()"
+            (commitmentChanged)="commitmentChanged.emit({ ticketId: selectedTicket.id, committed: $event })" />
           <qd-ticket-comments-panel
             [comments]="comments()"
             [users]="users()"
@@ -43,8 +49,10 @@ export class TicketDetailViewComponent {
   readonly workflow = input<Workflow | null>(null);
   readonly types = input<TicketType[]>([]);
   readonly users = input<PublicUser[]>([]);
+  readonly currentUser = input<PublicUser | null>(null);
 
   readonly closed = output<void>();
   readonly editRequested = output<string>();
   readonly commentSubmitted = output<{ ticketId: string; body: string }>();
+  readonly commitmentChanged = output<{ ticketId: string; committed: boolean }>();
 }

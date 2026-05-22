@@ -49,6 +49,8 @@ internal fun TransitionTicketRequest.toCommand() = TransitionTicketCommand(toSta
 
 internal fun CreateTicketCommentRequest.toCommand() = AddTicketCommentCommand(body)
 
+internal fun SaveTicketCommitmentRequest.toCommand() = SaveTicketCommitmentCommand(committed)
+
 internal fun BulkUpdateTicketsRequest.toCommand() =
     BulkUpdateTicketsCommand(ticketIds, assigneeId, clearAssignee, priority)
 
@@ -61,6 +63,12 @@ internal fun CreateSavedTicketFilterRequest.toCommand() =
 internal fun UpdateSavedTicketFilterRequest.toCommand() =
     UpdateSavedTicketFilterCommand(name, filters?.toDomain())
 
+internal fun CreateActivityHookRequest.toCommand() =
+    CreateActivityHookCommand(eventType, webhookUrl, messageTemplate, active)
+
+internal fun UpdateActivityHookRequest.toCommand() =
+    UpdateActivityHookCommand(eventType, webhookUrl, messageTemplate, active)
+
 internal fun AuthenticatedUser.toResponse() = LoginResponse(token, user.toResponse())
 
 internal fun BootstrapData.toResponse() =
@@ -72,9 +80,11 @@ internal fun BootstrapData.toResponse() =
         ticketTypes = ticketTypes.map(TicketType::toResponse),
         workflows = workflows.map(Workflow::toResponse),
         tickets = tickets.map(Ticket::toResponse),
+        deletedTickets = deletedTickets.map(Ticket::toResponse),
         comments = comments.map(TicketComment::toResponse),
         ticketChanges = changes.map(TicketChange::toResponse),
-        savedTicketFilters = savedTicketFilters.map(SavedTicketFilter::toResponse)
+        savedTicketFilters = savedTicketFilters.map(SavedTicketFilter::toResponse),
+        activityHooks = activityHooks.map(ActivityHook::toResponse)
     )
 
 internal fun TicketDetailData.toResponse() =
@@ -126,12 +136,15 @@ internal fun Ticket.toResponse() =
         typeId,
         priority,
         assigneeId,
+        committedUserIds,
         labels,
         dueDate,
         estimate,
         reporterId,
         createdAt,
-        updatedAt
+        updatedAt,
+        deletedAt,
+        deletedById
     )
 
 internal fun TicketComment.toResponse() =
@@ -148,3 +161,6 @@ internal fun SavedTicketFilterCriteriaDto.toDomain() =
 
 internal fun SavedTicketFilter.toResponse() =
     SavedTicketFilterResponse(id, organizationId, ownerId, name, view, projectId, filters.toResponse())
+
+internal fun ActivityHook.toResponse() =
+    ActivityHookResponse(id, organizationId, eventType, webhookUrl, messageTemplate, active)
