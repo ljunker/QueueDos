@@ -23,6 +23,7 @@ export const selectLoading = createSelector(selectQueueState, (state) => state.l
 export const selectAuthLoading = createSelector(selectQueueState, (state) => state.authLoading);
 export const selectError = createSelector(selectQueueState, (state) => state.error);
 export const selectLoginError = createSelector(selectQueueState, (state) => state.loginError);
+export const selectTheme = createSelector(selectQueueState, (state) => state.theme);
 export const selectActiveTab = createSelector(selectQueueState, (state) => state.activeTab);
 export const selectFilters = createSelector(selectQueueState, (state) => state.filters);
 export const selectMyTicketsFilters = createSelector(selectQueueState, (state) => state.myTicketsFilters);

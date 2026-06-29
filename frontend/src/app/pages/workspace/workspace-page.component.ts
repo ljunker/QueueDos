@@ -47,6 +47,7 @@ import {
   selectSelectedTicketWorkflow,
   selectSelectedWorkflow,
   selectSortedStatuses,
+  selectTheme,
   selectTicketDialog,
   selectToast,
   selectUsers,
@@ -90,7 +91,11 @@ import {
           (logoutRequested)="store.dispatch(logoutRequested())" />
 
         <section class="workspace">
-          <qd-workspace-toolbar [project]="selectedProject()" (newTicketRequested)="openCreateDialog()" />
+          <qd-workspace-toolbar
+            [project]="selectedProject()"
+            [theme]="theme()"
+            (themeToggled)="store.dispatch(themeToggled())"
+            (newTicketRequested)="openCreateDialog()" />
           <qd-workspace-tab-host
             [data]="data()"
             [activeTab]="activeTab()"
@@ -208,6 +213,7 @@ export class WorkspacePageComponent {
   protected readonly dialogTypes = this.store.selectSignal(selectDialogTypes);
   protected readonly workflowDraft = this.store.selectSignal(selectWorkflowDraft);
   protected readonly toast = this.store.selectSignal(selectToast);
+  protected readonly theme = this.store.selectSignal(selectTheme);
 
   protected readonly logoutRequested = QueueActions.logoutRequested;
   protected readonly detailClosed = QueueActions.detailClosed;
@@ -235,6 +241,7 @@ export class WorkspacePageComponent {
   protected readonly activityHookUpdateRequested = QueueActions.activityHookUpdateRequested;
   protected readonly activityHookDeleteRequested = QueueActions.activityHookDeleteRequested;
   protected readonly toastCleared = QueueActions.toastCleared;
+  protected readonly themeToggled = QueueActions.themeToggled;
   protected readonly Boolean = Boolean;
 
   constructor() {

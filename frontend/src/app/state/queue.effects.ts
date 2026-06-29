@@ -7,8 +7,9 @@ import {catchError, concatMap, debounceTime, filter, map, of, switchMap, tap, wi
 
 import {ApiClientService} from '../core/api-client.service';
 import {AuthTokenService} from '../core/auth-token.service';
+import {ThemeService} from '../core/theme.service';
 import {QueueActions} from './queue.actions';
-import {selectUrlQueryParams} from './queue.selectors';
+import {selectTheme, selectUrlQueryParams} from './queue.selectors';
 
 @Injectable()
 export class QueueEffects {
@@ -17,6 +18,7 @@ export class QueueEffects {
   private readonly auth = inject(AuthTokenService);
   private readonly router = inject(Router);
   private readonly store = inject(Store);
+  private readonly theme = inject(ThemeService);
 
   readonly appStarted$ = createEffect(() =>
     this.actions$.pipe(
@@ -367,7 +369,17 @@ export class QueueEffects {
     )
   );
 
-  readonly syncUrl$ = createEffect(
+  readonly syncTheme$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(QueueActions.themeInitialized, QueueActions.themeToggled),
+        withLatestFrom(this.store.select(selectTheme)),
+        tap(([, theme]) => this.theme.apply(theme))
+      ),
+    { dispatch: false }
+  );
+
+  readonly syncNavigationUrl$ = createEffect(
     () =>
       this.actions$.pipe(
         ofType(
@@ -375,10 +387,23 @@ export class QueueEffects {
           QueueActions.tabSelected,
           QueueActions.ticketDetailOpened,
           QueueActions.detailClosed,
-          QueueActions.filtersChanged,
-          QueueActions.myTicketsFiltersChanged,
           QueueActions.savedTicketFilterApplied
         ),
+        debounceTime(0),
+        withLatestFrom(this.store.select(selectUrlQueryParams)),
+        tap(([, queryParams]) => {
+          void this.router.navigate([], {
+            queryParams
+          });
+        })
+      ),
+    { dispatch: false }
+  );
+
+  readonly syncFilterUrl$ = createEffect(
+    () =>
+      this.actions$.pipe(
+        ofType(QueueActions.filtersChanged, QueueActions.myTicketsFiltersChanged),
         debounceTime(0),
         withLatestFrom(this.store.select(selectUrlQueryParams)),
         tap(([, queryParams]) => {

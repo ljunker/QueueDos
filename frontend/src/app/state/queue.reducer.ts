@@ -10,6 +10,7 @@ import {
   MyTicketsFilters,
   savedMyTicketsFilters,
   savedProjectFilters,
+  ThemeMode,
   TicketDialogState,
   TicketFilters,
   WorkspaceTab
@@ -22,6 +23,7 @@ export interface QueueState {
   authLoading: boolean;
   error: string;
   loginError: string;
+  theme: ThemeMode;
   selectedProjectId: string | null;
   activeTab: WorkspaceTab;
   detailReturnTab: DetailReturnTab;
@@ -40,6 +42,7 @@ export const initialState: QueueState = {
   authLoading: false,
   error: '',
   loginError: '',
+  theme: 'light',
   selectedProjectId: null,
   activeTab: 'board',
   detailReturnTab: 'list',
@@ -73,8 +76,17 @@ export const queueReducer = createReducer(
     authLoading: false,
     loginError: error
   })),
-  on(QueueActions.logoutCompleted, () => ({
-    ...initialState
+  on(QueueActions.logoutCompleted, (state) => ({
+    ...initialState,
+    theme: state.theme
+  })),
+  on(QueueActions.themeInitialized, (state, { theme }) => ({
+    ...state,
+    theme
+  })),
+  on(QueueActions.themeToggled, (state) => ({
+    ...state,
+    theme: state.theme === 'dark' ? 'light' : 'dark'
   })),
   on(QueueActions.bootstrapRequested, (state) => ({
     ...state,
@@ -103,7 +115,7 @@ export const queueReducer = createReducer(
     const activeTab = routeState.activeTab ?? state.activeTab;
     return {
       ...state,
-      activeTab: activeTab === 'admin' && state.data?.currentUser.role !== 'ADMIN' ? 'board' : activeTab,
+      activeTab: activeTab === 'admin' && state.data && state.data.currentUser.role !== 'ADMIN' ? 'board' : activeTab,
       selectedProjectId,
       detailTicketId: routeState.detailTicketId !== undefined ? routeState.detailTicketId : state.detailTicketId,
       filters: {

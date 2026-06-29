@@ -12,6 +12,7 @@ export type WorkspaceTab = 'board' | 'dashboard' | 'list' | 'my-tickets' | 'deta
 export type DetailReturnTab = Exclude<WorkspaceTab, 'detail'>;
 export type TicketSort = 'number' | 'title' | 'priority' | 'status' | 'updated';
 export type MyTicketsSort = Exclude<TicketSort, 'status'>;
+export type ThemeMode = 'light' | 'dark';
 
 export interface TicketFilters {
   q: string;

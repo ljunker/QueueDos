@@ -23,6 +23,7 @@ import {
 import {
   MyTicketsFilters,
   RouteWorkspaceState,
+  ThemeMode,
   TicketDialogSave,
   TicketDialogState,
   TicketFilters,
@@ -41,6 +42,8 @@ export const QueueActions = createActionGroup({
     'Login Failed': props<{ error: string }>(),
     'Logout Requested': emptyProps(),
     'Logout Completed': emptyProps(),
+    'Theme Initialized': props<{ theme: ThemeMode }>(),
+    'Theme Toggled': emptyProps(),
 
     'Bootstrap Requested': emptyProps(),
     'Bootstrap Succeeded': props<{ data: BootstrapResponse }>(),
