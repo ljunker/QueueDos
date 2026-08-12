@@ -11,8 +11,6 @@ data class BootstrapData(
     val workflows: List<Workflow>,
     val tickets: List<Ticket>,
     val deletedTickets: List<Ticket>,
-    val comments: List<TicketComment>,
-    val changes: List<TicketChange>,
     val savedTicketFilters: List<SavedTicketFilter>,
     val activityHooks: List<ActivityHook>
 )
@@ -20,7 +18,13 @@ data class BootstrapData(
 data class TicketDetailData(
     val ticket: Ticket,
     val comments: List<TicketComment>,
-    val changes: List<TicketChange>
+    val revisions: TicketRevisionPage,
+    val legacyChanges: List<TicketChange>
+)
+
+data class TicketRevisionPage(
+    val revisions: List<TicketRevision>,
+    val nextBeforeVersion: Long?
 )
 
 data class LoginCommand(val email: String, val password: String)
@@ -80,30 +84,37 @@ data class CreateTicketCommand(
 )
 
 data class UpdateTicketCommand(
+    val expectedVersion: Long,
     val title: String?,
     val description: String?,
     val typeId: String?,
     val priority: Priority?,
     val assigneeId: String?,
+    val clearAssignee: Boolean,
     val labels: List<String>?,
     val dueDate: String?,
     val estimate: Int?,
     val clearDueDate: Boolean,
-    val clearEstimate: Boolean
+    val clearEstimate: Boolean,
+    val statusId: String?
 )
 
-data class TransitionTicketCommand(val toStatusId: String)
+data class TransitionTicketCommand(val toStatusId: String, val expectedVersion: Long)
 
 data class AddTicketCommentCommand(val body: String)
 
+data class VersionedTicketRef(val id: String, val expectedVersion: Long)
+
 data class BulkUpdateTicketsCommand(
-    val ticketIds: List<String>,
+    val tickets: List<VersionedTicketRef>,
     val assigneeId: String?,
     val clearAssignee: Boolean,
     val priority: Priority?
 )
 
-data class SaveTicketCommitmentCommand(val committed: Boolean)
+data class SaveTicketCommitmentCommand(val committed: Boolean, val expectedVersion: Long)
+
+data class RestoreTicketCommand(val expectedVersion: Long)
 
 data class CreateActivityHookCommand(
     val eventType: ActivityEventType,

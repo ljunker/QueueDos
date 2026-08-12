@@ -19,6 +19,8 @@ import {
   Ticket,
   TicketComment,
   TicketDetailResponse,
+  TicketRevisionDetail,
+  TicketRevisionPage,
   TicketType,
   TransitionTicketRequest,
   UpdateActivityHookRequest,
@@ -51,6 +53,19 @@ export class ApiClientService {
     return this.http.get<TicketDetailResponse>(`/api/tickets/${id}`);
   }
 
+  ticketRevisions(id: string, beforeVersion?: number | null, limit = 50) {
+    const before = beforeVersion == null ? '' : `&beforeVersion=${beforeVersion}`;
+    return this.http.get<TicketRevisionPage>(`/api/tickets/${id}/revisions?limit=${limit}${before}`);
+  }
+
+  ticketRevision(id: string, version: number) {
+    return this.http.get<TicketRevisionDetail>(`/api/tickets/${id}/revisions/${version}`);
+  }
+
+  restoreTicketRevision(id: string, version: number, expectedVersion: number) {
+    return this.http.post<Ticket>(`/api/tickets/${id}/revisions/${version}/restore`, {expectedVersion});
+  }
+
   updateTicket(id: string, request: UpdateTicketRequest) {
     return this.http.put<Ticket>(`/api/tickets/${id}`, request);
   }
@@ -67,16 +82,16 @@ export class ApiClientService {
     return this.http.post<TicketComment>(`/api/tickets/${id}/comments`, request);
   }
 
-  saveCommitment(id: string, committed: boolean) {
-    return this.http.post<Ticket>(`/api/tickets/${id}/commitment`, {committed});
+  saveCommitment(id: string, committed: boolean, expectedVersion: number) {
+    return this.http.post<Ticket>(`/api/tickets/${id}/commitment`, {committed, expectedVersion});
   }
 
-  deleteTicket(id: string) {
-    return this.http.delete<void>(`/api/tickets/${id}`);
+  deleteTicket(id: string, expectedVersion: number) {
+    return this.http.delete<void>(`/api/tickets/${id}?expectedVersion=${expectedVersion}`);
   }
 
-  restoreTicket(id: string) {
-    return this.http.post<Ticket>(`/api/tickets/${id}/restore`, {});
+  restoreTicket(id: string, expectedVersion: number) {
+    return this.http.post<Ticket>(`/api/tickets/${id}/restore`, {expectedVersion});
   }
 
   createProject(request: CreateProjectRequest) {

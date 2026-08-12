@@ -1,6 +1,12 @@
 export type Role = 'ADMIN' | 'MEMBER';
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
+export interface ApiError {
+  message: string;
+  code?: string | null;
+  currentVersion?: number | null;
+}
+
 export interface Organization {
   id: string;
   name: string;
@@ -80,6 +86,7 @@ export interface Ticket {
   updatedAt: string;
   deletedAt: string | null;
   deletedById: string | null;
+  version: number;
 }
 
 export interface TicketComment {
@@ -100,6 +107,44 @@ export interface TicketChange {
   oldValue: string | null;
   newValue: string | null;
   createdAt: string;
+}
+
+export type TicketRevisionAction =
+  | 'BASELINE'
+  | 'CREATED'
+  | 'UPDATED'
+  | 'MOVED'
+  | 'COMMITMENT_CHANGED'
+  | 'DELETED'
+  | 'RESTORED'
+  | 'REVISION_RESTORED';
+
+export interface TicketRevisionChange {
+  field: string;
+  oldValue: unknown;
+  newValue: unknown;
+}
+
+export interface TicketRevisionSummary {
+  id: string;
+  ticketId: string;
+  version: number;
+  actorId: string | null;
+  action: TicketRevisionAction;
+  sourceVersion: number | null;
+  changes: TicketRevisionChange[];
+  createdAt: string;
+  restorable: boolean;
+}
+
+export interface TicketRevisionPage {
+  revisions: TicketRevisionSummary[];
+  nextBeforeVersion: number | null;
+}
+
+export interface TicketRevisionDetail {
+  revision: TicketRevisionSummary;
+  snapshot: Ticket;
 }
 
 export type SavedTicketFilterView = 'PROJECT_LIST' | 'MY_TICKETS';
@@ -166,8 +211,6 @@ export interface BootstrapResponse {
   workflows: Workflow[];
   tickets: Ticket[];
   deletedTickets: Ticket[];
-  comments: TicketComment[];
-  ticketChanges: TicketChange[];
   savedTicketFilters: SavedTicketFilter[];
   activityHooks: ActivityHook[];
   priorities: Priority[];
@@ -176,7 +219,8 @@ export interface BootstrapResponse {
 export interface TicketDetailResponse {
   ticket: Ticket;
   comments: TicketComment[];
-  changes: TicketChange[];
+  revisions: TicketRevisionPage;
+  legacyChanges: TicketChange[];
 }
 
 export interface CreateTicketCommentRequest {
@@ -185,6 +229,7 @@ export interface CreateTicketCommentRequest {
 
 export interface SaveTicketCommitmentRequest {
   committed: boolean;
+  expectedVersion: number;
 }
 
 export interface CreateProjectRequest {
@@ -241,27 +286,36 @@ export interface CreateTicketRequest {
 }
 
 export interface UpdateTicketRequest {
+  expectedVersion: number;
   title?: string;
   description?: string;
   typeId?: string;
   priority?: Priority;
   assigneeId?: string | null;
+  clearAssignee?: boolean;
   labels?: string[];
   dueDate?: string | null;
   estimate?: number | null;
   clearDueDate?: boolean;
   clearEstimate?: boolean;
+  statusId?: string | null;
 }
 
 export interface TransitionTicketRequest {
   toStatusId: string;
+  expectedVersion: number;
 }
 
 export interface BulkUpdateTicketsRequest {
-  ticketIds: string[];
+  tickets: VersionedTicketRef[];
   assigneeId?: string | null;
   clearAssignee?: boolean;
   priority?: Priority | null;
+}
+
+export interface VersionedTicketRef {
+  id: string;
+  expectedVersion: number;
 }
 
 export interface SaveWorkflowRequest {

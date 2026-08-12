@@ -113,7 +113,7 @@ class ApiRoutesTest {
             auth(adminToken)
             jsonBody(
                 BulkUpdateTicketsRequest(
-                    ticketIds = listOf(ticket.id),
+                    tickets = listOf(VersionedTicketRefRequest(ticket.id, ticket.version)),
                     assigneeId = "user-admin",
                     priority = de.ljunker.queuedos.domain.Priority.CRITICAL
                 )
@@ -129,7 +129,7 @@ class ApiRoutesTest {
 
         val committed = client.post("/api/tickets/${ticket.id}/commitment") {
             auth(memberToken)
-            jsonBody(SaveTicketCommitmentRequest(true))
+            jsonBody(SaveTicketCommitmentRequest(true, bulkUpdated.single().version))
         }.body<TicketResponse>()
         assertEquals(listOf("user-member"), committed.committedUserIds)
 
@@ -137,8 +137,25 @@ class ApiRoutesTest {
             auth(adminToken)
         }.body<TicketDetailResponse>()
         assertEquals("Observed during import.", detail.comments.single().body)
-        assertTrue(detail.changes.any { it.field == "ticket" })
-        assertTrue(detail.changes.any { it.field == "comment" })
+        assertTrue(detail.revisions.revisions.any { it.action == "CREATED" })
+        assertTrue(detail.revisions.revisions.none { revision -> revision.changes.any { it.field == "comment" } })
+        val revisionPage = client.get("/api/tickets/${ticket.id}/revisions?limit=1") {
+            auth(adminToken)
+        }.body<TicketRevisionPageResponse>()
+        assertEquals(1, revisionPage.revisions.size)
+        val revisionDetail = client.get(
+            "/api/tickets/${ticket.id}/revisions/${detail.revisions.revisions.last().version}"
+        ) {
+            auth(adminToken)
+        }.body<TicketRevisionDetailResponse>()
+        assertEquals(ticket.id, revisionDetail.snapshot.id)
+
+        val staleUpdate = client.put("/api/tickets/${ticket.id}") {
+            auth(adminToken)
+            jsonBody(UpdateTicketRequest(expectedVersion = ticket.version, title = "Stale update"))
+        }
+        assertEquals(HttpStatusCode.Conflict, staleUpdate.status)
+        assertEquals("TICKET_VERSION_CONFLICT", staleUpdate.body<ApiError>().code)
 
         val deleteUsedType = client.delete("/api/ticket-types/${updatedType.id}") {
             auth(adminToken)
@@ -167,13 +184,13 @@ class ApiRoutesTest {
 
         val memberTransition = client.post("/api/tickets/${ticket.id}/transition") {
             auth(memberToken)
-            jsonBody(TransitionTicketRequest(targetStatus))
+            jsonBody(TransitionTicketRequest(targetStatus, committed.version))
         }
         assertEquals(HttpStatusCode.Forbidden, memberTransition.status)
 
         val movedTicket = client.post("/api/tickets/${ticket.id}/transition") {
             auth(adminToken)
-            jsonBody(TransitionTicketRequest(targetStatus))
+            jsonBody(TransitionTicketRequest(targetStatus, committed.version))
         }.body<TicketResponse>()
         assertEquals(targetStatus, movedTicket.statusId)
 
@@ -187,7 +204,7 @@ class ApiRoutesTest {
         }
         assertEquals(HttpStatusCode.NoContent, deleteSavedFilter.status)
 
-        val deletedTicket = client.delete("/api/tickets/${ticket.id}") {
+        val deletedTicket = client.delete("/api/tickets/${ticket.id}?expectedVersion=${movedTicket.version}") {
             auth(adminToken)
         }
         assertEquals(HttpStatusCode.NoContent, deletedTicket.status)
@@ -195,6 +212,7 @@ class ApiRoutesTest {
         assertEquals(ticket.id, deletedBootstrap.deletedTickets.single { it.id == ticket.id }.id)
         val restored = client.post("/api/tickets/${ticket.id}/restore") {
             auth(adminToken)
+            jsonBody(RestoreTicketRequest(deletedBootstrap.deletedTickets.single { it.id == ticket.id }.version))
         }.body<TicketResponse>()
         assertEquals(ticket.id, restored.id)
 

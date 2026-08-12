@@ -18,7 +18,7 @@ internal fun Application.configureStatusPages() {
                 FailureKind.NOT_FOUND -> HttpStatusCode.NotFound
                 FailureKind.CONFLICT -> HttpStatusCode.Conflict
             }
-            call.respond(status, ApiError(cause.message))
+            call.respond(status, ApiError(cause.message, cause.code, cause.currentVersion))
         }
         exception<SerializationException> { call, _ ->
             call.respond(HttpStatusCode.BadRequest, ApiError("Invalid JSON request."))

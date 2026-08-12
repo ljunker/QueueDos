@@ -10,7 +10,9 @@ enum class FailureKind {
 
 open class QueueDosFailure(
     val kind: FailureKind,
-    override val message: String
+    override val message: String,
+    val code: String? = null,
+    val currentVersion: Long? = null
 ) : RuntimeException(message)
 
 class BadRequestFailure(message: String) : QueueDosFailure(FailureKind.BAD_REQUEST, message)
@@ -22,3 +24,10 @@ class ForbiddenFailure(message: String) : QueueDosFailure(FailureKind.FORBIDDEN,
 class NotFoundFailure(message: String) : QueueDosFailure(FailureKind.NOT_FOUND, message)
 
 class ConflictFailure(message: String) : QueueDosFailure(FailureKind.CONFLICT, message)
+
+class TicketVersionConflictFailure(currentVersion: Long) : QueueDosFailure(
+    FailureKind.CONFLICT,
+    "Ticket was changed by another request.",
+    "TICKET_VERSION_CONFLICT",
+    currentVersion
+)

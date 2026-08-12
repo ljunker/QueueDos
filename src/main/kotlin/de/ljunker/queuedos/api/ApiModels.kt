@@ -4,10 +4,13 @@ import de.ljunker.queuedos.domain.Priority
 import de.ljunker.queuedos.domain.Role
 import de.ljunker.queuedos.domain.SavedTicketFilterView
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 data class ApiError(
-    val message: String
+    val message: String,
+    val code: String? = null,
+    val currentVersion: Long? = null
 )
 
 @Serializable
@@ -37,8 +40,6 @@ data class BootstrapResponse(
     val workflows: List<WorkflowResponse>,
     val tickets: List<TicketResponse>,
     val deletedTickets: List<TicketResponse> = emptyList(),
-    val comments: List<TicketCommentResponse> = emptyList(),
-    val ticketChanges: List<TicketChangeResponse> = emptyList(),
     val savedTicketFilters: List<SavedTicketFilterResponse> = emptyList(),
     val activityHooks: List<ActivityHookResponse> = emptyList(),
     val priorities: List<Priority> = Priority.entries.toList()
@@ -48,7 +49,40 @@ data class BootstrapResponse(
 data class TicketDetailResponse(
     val ticket: TicketResponse,
     val comments: List<TicketCommentResponse>,
-    val changes: List<TicketChangeResponse>
+    val revisions: TicketRevisionPageResponse,
+    val legacyChanges: List<TicketChangeResponse>
+)
+
+@Serializable
+data class TicketRevisionPageResponse(
+    val revisions: List<TicketRevisionSummaryResponse>,
+    val nextBeforeVersion: Long? = null
+)
+
+@Serializable
+data class TicketRevisionSummaryResponse(
+    val id: String,
+    val ticketId: String,
+    val version: Long,
+    val actorId: String? = null,
+    val action: String,
+    val sourceVersion: Long? = null,
+    val changes: List<TicketRevisionChangeResponse> = emptyList(),
+    val createdAt: String,
+    val restorable: Boolean
+)
+
+@Serializable
+data class TicketRevisionDetailResponse(
+    val revision: TicketRevisionSummaryResponse,
+    val snapshot: TicketResponse
+)
+
+@Serializable
+data class TicketRevisionChangeResponse(
+    val field: String,
+    val oldValue: JsonElement? = null,
+    val newValue: JsonElement? = null
 )
 
 @Serializable
@@ -137,7 +171,8 @@ data class TicketResponse(
     val createdAt: String,
     val updatedAt: String,
     val deletedAt: String? = null,
-    val deletedById: String? = null
+    val deletedById: String? = null,
+    val version: Long
 )
 
 @Serializable
@@ -257,21 +292,25 @@ data class CreateTicketRequest(
 
 @Serializable
 data class UpdateTicketRequest(
+    val expectedVersion: Long,
     val title: String? = null,
     val description: String? = null,
     val typeId: String? = null,
     val priority: Priority? = null,
     val assigneeId: String? = null,
+    val clearAssignee: Boolean = false,
     val labels: List<String>? = null,
     val dueDate: String? = null,
     val estimate: Int? = null,
     val clearDueDate: Boolean = false,
-    val clearEstimate: Boolean = false
+    val clearEstimate: Boolean = false,
+    val statusId: String? = null
 )
 
 @Serializable
 data class TransitionTicketRequest(
-    val toStatusId: String
+    val toStatusId: String,
+    val expectedVersion: Long
 )
 
 @Serializable
@@ -281,8 +320,12 @@ data class CreateTicketCommentRequest(
 
 @Serializable
 data class SaveTicketCommitmentRequest(
-    val committed: Boolean
+    val committed: Boolean,
+    val expectedVersion: Long
 )
+
+@Serializable
+data class RestoreTicketRequest(val expectedVersion: Long)
 
 @Serializable
 data class SaveWorkflowRequest(
@@ -306,10 +349,16 @@ data class UpdateSavedTicketFilterRequest(
 
 @Serializable
 data class BulkUpdateTicketsRequest(
-    val ticketIds: List<String>,
+    val tickets: List<VersionedTicketRefRequest>,
     val assigneeId: String? = null,
     val clearAssignee: Boolean = false,
     val priority: Priority? = null
+)
+
+@Serializable
+data class VersionedTicketRefRequest(
+    val id: String,
+    val expectedVersion: Long
 )
 
 @Serializable

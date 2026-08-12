@@ -1,6 +1,7 @@
 package de.ljunker.queuedos.domain
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonElement
 
 @Serializable
 enum class Role {
@@ -104,7 +105,41 @@ data class Ticket(
     val createdAt: String,
     val updatedAt: String,
     val deletedAt: String? = null,
-    val deletedById: String? = null
+    val deletedById: String? = null,
+    val version: Long = 1
+)
+
+@Serializable
+enum class TicketRevisionAction {
+    BASELINE,
+    CREATED,
+    UPDATED,
+    MOVED,
+    COMMITMENT_CHANGED,
+    DELETED,
+    RESTORED,
+    REVISION_RESTORED
+}
+
+@Serializable
+data class TicketRevisionChange(
+    val field: String,
+    val oldValue: JsonElement? = null,
+    val newValue: JsonElement? = null
+)
+
+@Serializable
+data class TicketRevision(
+    val id: String,
+    val organizationId: String,
+    val ticketId: String,
+    val version: Long,
+    val actorId: String? = null,
+    val action: TicketRevisionAction,
+    val sourceVersion: Long? = null,
+    val snapshot: Ticket,
+    val changes: List<TicketRevisionChange> = emptyList(),
+    val createdAt: String
 )
 
 @Serializable

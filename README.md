@@ -81,3 +81,13 @@ npm start
 `npm start` startet den Angular-Dev-Server und proxyt `/api` an die Ktor-API auf `http://localhost:8080`. Das Subprojekt ist auf Angular 21 ausgelegt; dafür sollte Node.js 20.19+, 22.12+ oder 24 verwendet werden.
 
 Der Docker-Build baut das Angular-Frontend in einer eigenen Node-Stage und kopiert das Ergebnis in die Ktor-Ressourcen, damit `http://localhost:8080` die Angular-App ausliefert.
+
+
+Bauen mit 
+```bash
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t kryptikker/queuedos:latest \
+  -t kryptikker/queuedos:74f7163 \
+  --push .
+```

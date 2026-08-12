@@ -56,6 +56,9 @@ class AngularFrontendContractTest {
         assertContains(board, "ticketTransitioned")
         assertContains(detail, "commentSubmitted")
         assertContains(comments, "commentSubmitted")
+        assertContains(detail, "Restore this revision")
+        assertContains(projectFile("frontend/src/app/shared/organisms/ticket-history-panel.component.ts"), "Load older")
+        assertContains(projectFile("frontend/src/app/shared/organisms/ticket-dialog.component.ts"), "Apply my changes")
         assertContains(transitionEffect, "QueueActions.mutationSucceeded({})")
         assertFalse("focusTicketId" in transitionEffect)
     }

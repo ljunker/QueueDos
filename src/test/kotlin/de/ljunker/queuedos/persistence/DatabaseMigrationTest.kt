@@ -25,6 +25,10 @@ class DatabaseMigrationTest {
                     assertTrue(it.next())
                     assertTrue(it.getInt(1) >= 2)
                 }
+                statement.executeQuery("SELECT count(*) FROM queuedos_ticket_revisions WHERE action = 'CREATED'").use {
+                    assertTrue(it.next())
+                    assertTrue(it.getInt(1) > 0)
+                }
             }
         }
     }
@@ -50,6 +54,14 @@ class DatabaseMigrationTest {
 
         assertEquals("QueueDos", bootstrap.projects.single().name)
         assertEquals(listOf("QDOS-1", "QDOS-2", "QDOS-3"), bootstrap.tickets.map { it.key })
+        dataSource.connection.use { connection ->
+            connection.createStatement().executeQuery(
+                "SELECT count(*) FROM queuedos_ticket_revisions WHERE action = 'BASELINE'"
+            ).use {
+                assertTrue(it.next())
+                assertEquals(3, it.getInt(1))
+            }
+        }
     }
 
     @Test

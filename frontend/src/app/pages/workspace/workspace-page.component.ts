@@ -32,6 +32,7 @@ import {
   selectMyTickets,
   selectMyTicketsFilters,
   selectMyTicketsSavedFilters,
+  selectOpenedRevision,
   selectOrganizations,
   selectPriorities,
   selectProjects,
@@ -41,14 +42,16 @@ import {
   selectSelectedProject,
   selectSelectedProjectId,
   selectSelectedTicket,
-  selectSelectedTicketChanges,
   selectSelectedTicketComments,
+  selectSelectedTicketLegacyChanges,
+  selectSelectedTicketRevisions,
   selectSelectedTicketTypes,
   selectSelectedTicketWorkflow,
   selectSelectedWorkflow,
   selectSortedStatuses,
   selectTheme,
   selectTicketDialog,
+  selectTicketVersionConflict,
   selectToast,
   selectUsers,
   selectVisibleTickets,
@@ -118,7 +121,9 @@ import {
             [selectedTicketWorkflow]="selectedTicketWorkflow()"
             [selectedTicketTypes]="selectedTicketTypes()"
             [selectedTicketComments]="selectedTicketComments()"
-            [selectedTicketChanges]="selectedTicketChanges()"
+            [selectedTicketRevisions]="selectedTicketRevisions()"
+            [selectedTicketLegacyChanges]="selectedTicketLegacyChanges()"
+            [openedRevision]="openedRevision()"
             [workflowDraft]="workflowDraft()"
             [projectSavedFilters]="projectSavedFilters()"
             [myTicketsSavedFilters]="myTicketsSavedFilters()"
@@ -130,6 +135,10 @@ import {
             (detailClosed)="store.dispatch(detailClosed())"
             (editRequested)="openEditDialog($event)"
             (commitmentChanged)="store.dispatch(ticketCommitmentRequested($event))"
+            (revisionOpened)="store.dispatch(revisionOpenRequested({ticketId: $event.ticketId, version: $event.version}))"
+            (revisionClosed)="store.dispatch(revisionClosed())"
+            (olderRevisionsRequested)="loadOlderRevisions($event)"
+            (revisionRestoreRequested)="store.dispatch(revisionRestoreRequested($event))"
             (commentSubmitted)="store.dispatch(commentCreateRequested($event))"
             (projectCreated)="store.dispatch(projectCreateRequested({ request: $event }))"
             (projectSelected)="dispatchProjectSelected($event)"
@@ -144,7 +153,7 @@ import {
             (transitionPatched)="store.dispatch(workflowTransitionPatched($event))"
             (transitionRemoved)="store.dispatch(workflowTransitionRemoved({ index: $event }))"
             (workflowSaved)="saveWorkflow()"
-            (ticketRestored)="store.dispatch(ticketRestoreRequested({ ticketId: $event }))"
+            (ticketRestored)="restoreDeletedTicket($event)"
             (activityHookCreated)="store.dispatch(activityHookCreateRequested({ request: $event }))"
             (activityHookUpdated)="store.dispatch(activityHookUpdateRequested($event))"
             (activityHookDeleted)="store.dispatch(activityHookDeleteRequested({ hookId: $event }))"
@@ -164,9 +173,12 @@ import {
           [priorities]="priorities()"
           [users]="activeUsers()"
           [isAdmin]="isAdmin()"
+          [versionConflict]="ticketVersionConflict()"
+          [conflictTicket]="selectedTicket()"
           (closed)="store.dispatch(ticketDialogClosed())"
           (saved)="store.dispatch(ticketDialogSaved($event))"
-          (deleteRequested)="store.dispatch(ticketDeleteRequested({ ticketId: $event }))" />
+          (conflictReloadRequested)="store.dispatch(ticketConflictReloadRequested({ticketId: $event}))"
+          (deleteRequested)="deleteTicket($event)" />
 
         <qd-toast [message]="toast()" (cleared)="store.dispatch(toastCleared())" />
       </main>
@@ -205,8 +217,11 @@ export class WorkspacePageComponent {
   protected readonly selectedTicketWorkflow = this.store.selectSignal(selectSelectedTicketWorkflow);
   protected readonly selectedTicketTypes = this.store.selectSignal(selectSelectedTicketTypes);
   protected readonly selectedTicketComments = this.store.selectSignal(selectSelectedTicketComments);
-  protected readonly selectedTicketChanges = this.store.selectSignal(selectSelectedTicketChanges);
+  protected readonly selectedTicketRevisions = this.store.selectSignal(selectSelectedTicketRevisions);
+  protected readonly selectedTicketLegacyChanges = this.store.selectSignal(selectSelectedTicketLegacyChanges);
+  protected readonly openedRevision = this.store.selectSignal(selectOpenedRevision);
   protected readonly ticketDialog = this.store.selectSignal(selectTicketDialog);
+  protected readonly ticketVersionConflict = this.store.selectSignal(selectTicketVersionConflict);
   protected readonly dialogTicket = this.store.selectSignal(selectDialogTicket);
   protected readonly dialogProject = this.store.selectSignal(selectDialogProject);
   protected readonly dialogWorkflow = this.store.selectSignal(selectDialogWorkflow);
@@ -234,6 +249,10 @@ export class WorkspacePageComponent {
   protected readonly ticketDialogSaved = QueueActions.ticketDialogSaved;
   protected readonly ticketDeleteRequested = QueueActions.ticketDeleteRequested;
   protected readonly ticketRestoreRequested = QueueActions.ticketRestoreRequested;
+  protected readonly ticketConflictReloadRequested = QueueActions.ticketConflictReloadRequested;
+  protected readonly revisionOpenRequested = QueueActions.revisionOpenRequested;
+  protected readonly revisionClosed = QueueActions.revisionClosed;
+  protected readonly revisionRestoreRequested = QueueActions.revisionRestoreRequested;
   protected readonly ticketsBulkUpdateRequested = QueueActions.ticketsBulkUpdateRequested;
   protected readonly savedTicketFilterApplied = QueueActions.savedTicketFilterApplied;
   protected readonly savedTicketFilterDeleteRequested = QueueActions.savedTicketFilterDeleteRequested;
@@ -272,6 +291,23 @@ export class WorkspacePageComponent {
 
   protected transitionTicket(event: { ticket: Ticket; toStatusId: string }): void {
     this.store.dispatch(QueueActions.ticketTransitionRequested(event));
+  }
+
+  protected loadOlderRevisions(beforeVersion: number): void {
+    const ticket = this.selectedTicket();
+    if (ticket) this.store.dispatch(QueueActions.olderRevisionsRequested({ticketId: ticket.id, beforeVersion}));
+  }
+
+  protected deleteTicket(ticketId: string): void {
+    const ticket = this.dialogTicket();
+    if (ticket?.id === ticketId) {
+      this.store.dispatch(QueueActions.ticketDeleteRequested({ticketId, expectedVersion: ticket.version}));
+    }
+  }
+
+  protected restoreDeletedTicket(ticketId: string): void {
+    const ticket = this.data()?.deletedTickets.find((candidate) => candidate.id === ticketId);
+    if (ticket) this.store.dispatch(QueueActions.ticketRestoreRequested({ticketId, expectedVersion: ticket.version}));
   }
 
   protected changeFilters(filters: Partial<TicketFilters>): void {

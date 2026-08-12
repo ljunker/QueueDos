@@ -33,26 +33,29 @@ internal fun CreateTicketRequest.toCommand() =
 
 internal fun UpdateTicketRequest.toCommand() =
     UpdateTicketCommand(
+        expectedVersion,
         title,
         description,
         typeId,
         priority,
         assigneeId,
+        clearAssignee,
         labels,
         dueDate,
         estimate,
         clearDueDate,
-        clearEstimate
+        clearEstimate,
+        statusId
     )
 
-internal fun TransitionTicketRequest.toCommand() = TransitionTicketCommand(toStatusId)
+internal fun TransitionTicketRequest.toCommand() = TransitionTicketCommand(toStatusId, expectedVersion)
 
 internal fun CreateTicketCommentRequest.toCommand() = AddTicketCommentCommand(body)
 
-internal fun SaveTicketCommitmentRequest.toCommand() = SaveTicketCommitmentCommand(committed)
+internal fun SaveTicketCommitmentRequest.toCommand() = SaveTicketCommitmentCommand(committed, expectedVersion)
 
 internal fun BulkUpdateTicketsRequest.toCommand() =
-    BulkUpdateTicketsCommand(ticketIds, assigneeId, clearAssignee, priority)
+    BulkUpdateTicketsCommand(tickets.map { VersionedTicketRef(it.id, it.expectedVersion) }, assigneeId, clearAssignee, priority)
 
 internal fun SaveWorkflowRequest.toCommand() =
     SaveWorkflowCommand(statuses.map(WorkflowStatusDto::toDomain), transitions.map(WorkflowTransitionDto::toDomain))
@@ -81,8 +84,6 @@ internal fun BootstrapData.toResponse() =
         workflows = workflows.map(Workflow::toResponse),
         tickets = tickets.map(Ticket::toResponse),
         deletedTickets = deletedTickets.map(Ticket::toResponse),
-        comments = comments.map(TicketComment::toResponse),
-        ticketChanges = changes.map(TicketChange::toResponse),
         savedTicketFilters = savedTicketFilters.map(SavedTicketFilter::toResponse),
         activityHooks = activityHooks.map(ActivityHook::toResponse)
     )
@@ -91,8 +92,27 @@ internal fun TicketDetailData.toResponse() =
     TicketDetailResponse(
         ticket = ticket.toResponse(),
         comments = comments.map(TicketComment::toResponse),
-        changes = changes.map(TicketChange::toResponse)
+        revisions = revisions.toResponse(),
+        legacyChanges = legacyChanges.map(TicketChange::toResponse)
     )
+
+internal fun TicketRevisionPage.toResponse() =
+    TicketRevisionPageResponse(revisions.map(TicketRevision::toSummaryResponse), nextBeforeVersion)
+
+internal fun TicketRevision.toSummaryResponse() =
+    TicketRevisionSummaryResponse(
+        id = id,
+        ticketId = ticketId,
+        version = version,
+        actorId = actorId,
+        action = action.name,
+        sourceVersion = sourceVersion,
+        changes = changes.map { TicketRevisionChangeResponse(it.field, it.oldValue, it.newValue) },
+        createdAt = createdAt,
+        restorable = snapshot.deletedAt == null
+    )
+
+internal fun TicketRevision.toDetailResponse() = TicketRevisionDetailResponse(toSummaryResponse(), snapshot.toResponse())
 
 internal fun Organization.toResponse() = OrganizationResponse(id, name)
 
@@ -144,7 +164,8 @@ internal fun Ticket.toResponse() =
         createdAt,
         updatedAt,
         deletedAt,
-        deletedById
+        deletedById,
+        version
     )
 
 internal fun TicketComment.toResponse() =

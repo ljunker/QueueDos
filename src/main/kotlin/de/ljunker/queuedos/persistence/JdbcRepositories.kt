@@ -1,6 +1,7 @@
 package de.ljunker.queuedos.persistence
 
 import de.ljunker.queuedos.domain.*
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.sql.Connection
@@ -19,7 +20,7 @@ class JdbcQueueRepositories(
             projects = JdbcProjectRepository(transactionRunner),
             ticketTypes = JdbcTicketTypeRepository(transactionRunner),
             workflows = JdbcWorkflowRepository(transactionRunner),
-            tickets = JdbcTicketRepository(transactionRunner),
+            tickets = JdbcTicketRepository(transactionRunner, json),
             savedTicketFilters = JdbcSavedTicketFilterRepository(transactionRunner, json),
             activityHooks = JdbcActivityHookRepository(transactionRunner)
         )
@@ -490,14 +491,15 @@ private class JdbcWorkflowRepository(
 }
 
 private class JdbcTicketRepository(
-    private val transactions: JdbcTransactionRunner
+    private val transactions: JdbcTransactionRunner,
+    private val json: Json
 ) : TicketRepository {
     override fun listByOrganization(organizationId: String): List<Ticket> =
         connection().query(
             """
             SELECT id, organization_id, project_id, number, key, title, description, status_id, type_id,
                    priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at, deleted_at,
-                   deleted_by_id
+                   deleted_by_id, version
             FROM queuedos_tickets
             WHERE organization_id = ? AND deleted_at IS NULL
             ORDER BY project_id, number
@@ -510,7 +512,7 @@ private class JdbcTicketRepository(
             """
             SELECT id, organization_id, project_id, number, key, title, description, status_id, type_id,
                    priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at, deleted_at,
-                   deleted_by_id
+                   deleted_by_id, version
             FROM queuedos_tickets
             WHERE organization_id = ? AND deleted_at IS NOT NULL
             ORDER BY deleted_at DESC, project_id, number
@@ -523,7 +525,7 @@ private class JdbcTicketRepository(
             """
             SELECT id, organization_id, project_id, number, key, title, description, status_id, type_id,
                    priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at, deleted_at,
-                   deleted_by_id
+                   deleted_by_id, version
             FROM queuedos_tickets
             WHERE organization_id = ? AND id = ? AND deleted_at IS NULL
             """.trimIndent(),
@@ -536,9 +538,36 @@ private class JdbcTicketRepository(
             """
             SELECT id, organization_id, project_id, number, key, title, description, status_id, type_id,
                    priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at, deleted_at,
-                   deleted_by_id
+                   deleted_by_id, version
             FROM queuedos_tickets
             WHERE organization_id = ? AND id = ? AND deleted_at IS NOT NULL
+            """.trimIndent(),
+            organizationId,
+            ticketId
+        ) { ticket(it) }
+
+    override fun findIncludingDeleted(organizationId: String, ticketId: String): Ticket? =
+        connection().queryOne(
+            """
+            SELECT id, organization_id, project_id, number, key, title, description, status_id, type_id,
+                   priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at, deleted_at,
+                   deleted_by_id, version
+            FROM queuedos_tickets
+            WHERE organization_id = ? AND id = ?
+            """.trimIndent(),
+            organizationId,
+            ticketId
+        ) { ticket(it) }
+
+    override fun findIncludingDeletedForUpdate(organizationId: String, ticketId: String): Ticket? =
+        connection().queryOne(
+            """
+            SELECT id, organization_id, project_id, number, key, title, description, status_id, type_id,
+                   priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at, deleted_at,
+                   deleted_by_id, version
+            FROM queuedos_tickets
+            WHERE organization_id = ? AND id = ?
+            FOR UPDATE
             """.trimIndent(),
             organizationId,
             ticketId
@@ -549,8 +578,8 @@ private class JdbcTicketRepository(
             """
             INSERT INTO queuedos_tickets
                 (id, organization_id, project_id, number, key, title, description, status_id, type_id,
-                 priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 priority, assignee_id, due_date, estimate, reporter_id, created_at, updated_at, version)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
             ticket.id,
             ticket.organizationId,
@@ -567,7 +596,8 @@ private class JdbcTicketRepository(
             ticket.estimate,
             ticket.reporterId,
             ticket.createdAt,
-            ticket.updatedAt
+            ticket.updatedAt,
+            ticket.version
         )
         replaceLabels(ticket)
     }
@@ -577,7 +607,7 @@ private class JdbcTicketRepository(
             """
             UPDATE queuedos_tickets
             SET title = ?, description = ?, status_id = ?, type_id = ?, priority = ?, assignee_id = ?,
-                due_date = ?, estimate = ?, updated_at = ?, deleted_at = ?, deleted_by_id = ?
+                due_date = ?, estimate = ?, updated_at = ?, deleted_at = ?, deleted_by_id = ?, version = ?
             WHERE id = ? AND organization_id = ?
             """.trimIndent(),
             ticket.title,
@@ -591,10 +621,39 @@ private class JdbcTicketRepository(
             ticket.updatedAt,
             ticket.deletedAt,
             ticket.deletedById,
+            ticket.version,
             ticket.id,
             ticket.organizationId
         )
         replaceLabels(ticket)
+    }
+
+    override fun updateVersioned(ticket: Ticket, expectedVersion: Long): Boolean {
+        val changed = connection().executeCount(
+            """
+            UPDATE queuedos_tickets
+            SET title = ?, description = ?, status_id = ?, type_id = ?, priority = ?, assignee_id = ?,
+                due_date = ?, estimate = ?, updated_at = ?, deleted_at = ?, deleted_by_id = ?, version = ?
+            WHERE id = ? AND organization_id = ? AND version = ?
+            """.trimIndent(),
+            ticket.title,
+            ticket.description,
+            ticket.statusId,
+            ticket.typeId,
+            ticket.priority.name,
+            ticket.assigneeId,
+            ticket.dueDate,
+            ticket.estimate,
+            ticket.updatedAt,
+            ticket.deletedAt,
+            ticket.deletedById,
+            ticket.version,
+            ticket.id,
+            ticket.organizationId,
+            expectedVersion
+        ) == 1
+        if (changed) replaceLabels(ticket)
+        return changed
     }
 
     override fun setCommitment(ticketId: String, userId: String, committed: Boolean) {
@@ -607,6 +666,17 @@ private class JdbcTicketRepository(
         } else {
             connection().execute(
                 "DELETE FROM queuedos_ticket_commitments WHERE ticket_id = ? AND user_id = ?",
+                ticketId,
+                userId
+            )
+        }
+    }
+
+    override fun replaceCommitments(ticketId: String, userIds: List<String>) {
+        connection().execute("DELETE FROM queuedos_ticket_commitments WHERE ticket_id = ?", ticketId)
+        userIds.distinct().sorted().forEach { userId ->
+            connection().execute(
+                "INSERT INTO queuedos_ticket_commitments (ticket_id, user_id) VALUES (?, ?)",
                 ticketId,
                 userId
             )
@@ -697,6 +767,91 @@ private class JdbcTicketRepository(
         }
     }
 
+    override fun revisions(
+        organizationId: String,
+        ticketId: String,
+        beforeVersion: Long?,
+        limit: Int
+    ): List<TicketRevision> =
+        if (beforeVersion == null) {
+            connection().query(
+                """
+                SELECT id, organization_id, ticket_id, version, actor_id, action, source_version,
+                       snapshot::text AS snapshot, changes::text AS changes, created_at
+                FROM queuedos_ticket_revisions
+                WHERE organization_id = ? AND ticket_id = ?
+                ORDER BY version DESC
+                LIMIT ?
+                """.trimIndent(),
+                organizationId,
+                ticketId,
+                limit
+            ) { revision(it) }
+        } else {
+            connection().query(
+                """
+                SELECT id, organization_id, ticket_id, version, actor_id, action, source_version,
+                       snapshot::text AS snapshot, changes::text AS changes, created_at
+                FROM queuedos_ticket_revisions
+                WHERE organization_id = ? AND ticket_id = ? AND version < ?
+                ORDER BY version DESC
+                LIMIT ?
+                """.trimIndent(),
+                organizationId,
+                ticketId,
+                beforeVersion,
+                limit
+            ) { revision(it) }
+        }
+
+    override fun findRevision(organizationId: String, ticketId: String, version: Long): TicketRevision? =
+        connection().queryOne(
+            """
+            SELECT id, organization_id, ticket_id, version, actor_id, action, source_version,
+                   snapshot::text AS snapshot, changes::text AS changes, created_at
+            FROM queuedos_ticket_revisions
+            WHERE organization_id = ? AND ticket_id = ? AND version = ?
+            """.trimIndent(),
+            organizationId,
+            ticketId,
+            version
+        ) { revision(it) }
+
+    override fun insertRevision(revision: TicketRevision) {
+        connection().execute(
+            """
+            INSERT INTO queuedos_ticket_revisions
+                (id, organization_id, ticket_id, version, actor_id, action, source_version,
+                 snapshot, changes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?)
+            """.trimIndent(),
+            revision.id,
+            revision.organizationId,
+            revision.ticketId,
+            revision.version,
+            revision.actorId,
+            revision.action.name,
+            revision.sourceVersion,
+            json.encodeToString(revision.snapshot),
+            json.encodeToString(revision.changes),
+            revision.createdAt
+        )
+    }
+
+    private fun revision(result: ResultSet): TicketRevision =
+        TicketRevision(
+            id = result.getString("id"),
+            organizationId = result.getString("organization_id"),
+            ticketId = result.getString("ticket_id"),
+            version = result.getLong("version"),
+            actorId = result.getString("actor_id"),
+            action = TicketRevisionAction.valueOf(result.getString("action")),
+            sourceVersion = result.getNullableLong("source_version"),
+            snapshot = json.decodeFromString(result.getString("snapshot")),
+            changes = json.decodeFromString(result.getString("changes")),
+            createdAt = result.getString("created_at")
+        )
+
     private fun ticket(result: ResultSet): Ticket {
         val ticketId = result.getString("id")
         return Ticket(
@@ -719,7 +874,8 @@ private class JdbcTicketRepository(
             createdAt = result.getString("created_at"),
             updatedAt = result.getString("updated_at"),
             deletedAt = result.getString("deleted_at"),
-            deletedById = result.getString("deleted_by_id")
+            deletedById = result.getString("deleted_by_id"),
+            version = result.getLong("version")
         )
     }
 
@@ -1023,11 +1179,14 @@ private fun <T> Connection.query(
     }
 
 private fun Connection.execute(sql: String, vararg values: Any?) {
+    executeCount(sql, *values)
+}
+
+private fun Connection.executeCount(sql: String, vararg values: Any?): Int =
     prepareStatement(sql).use { statement ->
         statement.bind(values)
         statement.executeUpdate()
     }
-}
 
 private fun PreparedStatement.bind(values: Array<out Any?>) {
     values.forEachIndexed { index, value ->
@@ -1036,6 +1195,7 @@ private fun PreparedStatement.bind(values: Array<out Any?>) {
             null -> setNull(parameter, Types.NULL)
             is Boolean -> setBoolean(parameter, value)
             is Int -> setInt(parameter, value)
+            is Long -> setLong(parameter, value)
             else -> setObject(parameter, value)
         }
     }
@@ -1043,5 +1203,10 @@ private fun PreparedStatement.bind(values: Array<out Any?>) {
 
 private fun ResultSet.getNullableInt(column: String): Int? {
     val value = getInt(column)
+    return if (wasNull()) null else value
+}
+
+private fun ResultSet.getNullableLong(column: String): Long? {
+    val value = getLong(column)
     return if (wasNull()) null else value
 }

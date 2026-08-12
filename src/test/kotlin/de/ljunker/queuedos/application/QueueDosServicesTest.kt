@@ -80,7 +80,7 @@ class QueueDosServicesTest {
         services.workflows.save(admin, project.id, SaveWorkflowCommand(workflow.statuses, emptyList()))
 
         val failure = assertFailsWith<QueueDosFailure> {
-            services.tickets.transition(admin, todoTicket.id, TransitionTicketCommand("status-done"))
+            services.tickets.transition(admin, todoTicket.id, TransitionTicketCommand("status-done", todoTicket.version))
         }
 
         assertEquals(FailureKind.CONFLICT, failure.kind)
@@ -140,16 +140,19 @@ class QueueDosServicesTest {
             admin,
             ticket.id,
             UpdateTicketCommand(
+                expectedVersion = ticket.version,
                 title = "Customer outage follow-up",
                 description = null,
                 typeId = null,
                 priority = null,
                 assigneeId = null,
+                clearAssignee = false,
                 labels = listOf("customer"),
                 dueDate = null,
                 estimate = 5,
                 clearDueDate = true,
-                clearEstimate = false
+                clearEstimate = false,
+                statusId = null
             )
         )
         services.tickets.addComment(admin, ticket.id, AddTicketCommentCommand("Waiting on logs."))
@@ -160,8 +163,70 @@ class QueueDosServicesTest {
         assertEquals(null, detail.ticket.dueDate)
         assertEquals(5, detail.ticket.estimate)
         assertEquals("Waiting on logs.", detail.comments.single().body)
-        assertTrue(detail.changes.any { it.field == "title" })
-        assertTrue(detail.changes.any { it.field == "comment" })
+        assertTrue(detail.revisions.revisions.any { revision -> revision.changes.any { it.field == "title" } })
+        assertTrue(detail.revisions.revisions.none { revision -> revision.changes.any { it.field == "comment" } })
+    }
+
+    @Test
+    fun ticketRevisionsRejectStaleWritesAndRestoreSnapshotsAsNewVersions() {
+        val services = newServices()
+        val admin = admin(services)
+        val original = services.queries.bootstrap(admin).tickets.first()
+
+        val changed = services.tickets.update(
+            admin,
+            original.id,
+            UpdateTicketCommand(
+                expectedVersion = original.version,
+                title = "Revised title",
+                description = null,
+                typeId = null,
+                priority = null,
+                assigneeId = null,
+                clearAssignee = false,
+                labels = null,
+                dueDate = null,
+                estimate = null,
+                clearDueDate = false,
+                clearEstimate = false,
+                statusId = null
+            )
+        )
+        val conflict = assertFailsWith<TicketVersionConflictFailure> {
+            services.tickets.update(
+                admin,
+                original.id,
+                UpdateTicketCommand(
+                    expectedVersion = original.version,
+                    title = "Stale title",
+                    description = null,
+                    typeId = null,
+                    priority = null,
+                    assigneeId = null,
+                    clearAssignee = false,
+                    labels = null,
+                    dueDate = null,
+                    estimate = null,
+                    clearDueDate = false,
+                    clearEstimate = false,
+                    statusId = null
+                )
+            )
+        }
+
+        val restored = services.tickets.restoreRevision(
+            admin,
+            original.id,
+            original.version,
+            RestoreTicketCommand(changed.version)
+        )
+        val history = services.queries.ticketDetail(admin, original.id).revisions.revisions
+
+        assertEquals(changed.version, conflict.currentVersion)
+        assertEquals(original.title, restored.title)
+        assertEquals(changed.version + 1, restored.version)
+        assertEquals(original.version, history.first().sourceVersion)
+        assertEquals(TicketRevisionAction.REVISION_RESTORED, history.first().action)
     }
 
     @Test
@@ -196,9 +261,9 @@ class QueueDosServicesTest {
             )
         )
 
-        val moved = services.tickets.transition(admin, todoTicket.id, TransitionTicketCommand("status-done"))
+        val moved = services.tickets.transition(admin, todoTicket.id, TransitionTicketCommand("status-done", todoTicket.version))
         val failure = assertFailsWith<QueueDosFailure> {
-            services.tickets.transition(admin, moved.id, TransitionTicketCommand("status-todo"))
+            services.tickets.transition(admin, moved.id, TransitionTicketCommand("status-todo", moved.version))
         }
 
         assertEquals("status-done", moved.statusId)
@@ -271,17 +336,19 @@ class QueueDosServicesTest {
         val admin = admin(services)
         val bootstrap = services.queries.bootstrap(admin)
         val project = bootstrap.projects.first()
-        val ticketIds = bootstrap.tickets.take(2).map { it.id }
+        var ticketRefs = bootstrap.tickets.take(2).map { VersionedTicketRef(it.id, it.version) }
+        val ticketIds = ticketRefs.map { it.id }
 
         val reassigned = services.tickets.bulkUpdate(
             admin,
-            BulkUpdateTicketsCommand(ticketIds, "user-member", clearAssignee = false, priority = Priority.LOW)
+            BulkUpdateTicketsCommand(ticketRefs, "user-member", clearAssignee = false, priority = Priority.LOW)
         )
         assertTrue(reassigned.all { it.assigneeId == "user-member" && it.priority == Priority.LOW })
 
+        ticketRefs = reassigned.map { VersionedTicketRef(it.id, it.version) }
         val cleared = services.tickets.bulkUpdate(
             admin,
-            BulkUpdateTicketsCommand(ticketIds, assigneeId = null, clearAssignee = true, priority = null)
+            BulkUpdateTicketsCommand(ticketRefs, assigneeId = null, clearAssignee = true, priority = null)
         )
         assertTrue(cleared.all { it.assigneeId == null })
 
@@ -289,20 +356,20 @@ class QueueDosServicesTest {
             services.tickets.bulkUpdate(admin, BulkUpdateTicketsCommand(emptyList(), null, false, Priority.HIGH))
         }
         val emptyMutation = assertFailsWith<QueueDosFailure> {
-            services.tickets.bulkUpdate(admin, BulkUpdateTicketsCommand(ticketIds, null, false, null))
+            services.tickets.bulkUpdate(admin, BulkUpdateTicketsCommand(cleared.map { VersionedTicketRef(it.id, it.version) }, null, false, null))
         }
         val beforeInvalid = services.queries.bootstrap(admin).tickets.filter { it.id in ticketIds }
         val invalidAssignee = assertFailsWith<QueueDosFailure> {
             services.tickets.bulkUpdate(
                 admin,
-                BulkUpdateTicketsCommand(ticketIds, "user-outside", false, Priority.CRITICAL)
+                BulkUpdateTicketsCommand(cleared.map { VersionedTicketRef(it.id, it.version) }, "user-outside", false, Priority.CRITICAL)
             )
         }
         assertEquals(beforeInvalid, services.queries.bootstrap(admin).tickets.filter { it.id in ticketIds })
 
         services.projects.update(admin, project.id, UpdateProjectCommand(null, null, null, archived = true))
         val archivedFailure = assertFailsWith<QueueDosFailure> {
-            services.tickets.bulkUpdate(admin, BulkUpdateTicketsCommand(ticketIds, null, false, Priority.HIGH))
+            services.tickets.bulkUpdate(admin, BulkUpdateTicketsCommand(cleared.map { VersionedTicketRef(it.id, it.version) }, null, false, Priority.HIGH))
         }
 
         assertEquals(FailureKind.BAD_REQUEST, emptySelection.kind)
@@ -319,17 +386,18 @@ class QueueDosServicesTest {
         val member = services.auth.login(LoginCommand("member@queuedos.local", "member")).user
         val ticket = services.queries.bootstrap(admin).tickets.first()
 
-        val committed = services.tickets.saveCommitment(member, ticket.id, SaveTicketCommitmentCommand(true))
-        services.tickets.delete(admin, ticket.id)
+        val committed = services.tickets.saveCommitment(member, ticket.id, SaveTicketCommitmentCommand(true, ticket.version))
+        services.tickets.delete(admin, ticket.id, committed.version)
 
         assertTrue(member.id in committed.committedUserIds)
         assertTrue(services.queries.bootstrap(admin).tickets.none { it.id == ticket.id })
         assertEquals(ticket.id, services.queries.bootstrap(admin).deletedTickets.single { it.id == ticket.id }.id)
         assertTrue(services.queries.bootstrap(member).deletedTickets.isEmpty())
 
-        val restored = services.tickets.restore(admin, ticket.id)
+        val deleted = services.queries.bootstrap(admin).deletedTickets.single { it.id == ticket.id }
+        val restored = services.tickets.restore(admin, ticket.id, RestoreTicketCommand(deleted.version))
         assertEquals(ticket.id, restored.id)
-        assertTrue(services.queries.ticketDetail(admin, ticket.id).changes.any { it.field == "deletedAt" })
+        assertTrue(services.queries.ticketDetail(admin, ticket.id).revisions.revisions.any { it.action == TicketRevisionAction.RESTORED })
     }
 
     @Test

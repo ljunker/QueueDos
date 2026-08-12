@@ -45,10 +45,14 @@ export interface TicketDialogState {
   ticketId: string | null;
 }
 
+export interface TicketVersionConflictState {
+  save: UpdateTicketWithTransition;
+  currentVersion: number;
+}
+
 export interface UpdateTicketWithTransition {
   id: string;
   request: UpdateTicketRequest;
-  toStatusId: string;
 }
 
 export type TicketDialogSave =

@@ -6,8 +6,6 @@ import {
   Project,
   PublicUser,
   Ticket,
-  TicketChange,
-  TicketComment,
   TicketType,
   Workflow,
   WorkflowStatus
@@ -29,6 +27,9 @@ export const selectFilters = createSelector(selectQueueState, (state) => state.f
 export const selectMyTicketsFilters = createSelector(selectQueueState, (state) => state.myTicketsFilters);
 export const selectSelectedProjectId = createSelector(selectQueueState, (state) => state.selectedProjectId);
 export const selectDetailTicketId = createSelector(selectQueueState, (state) => state.detailTicketId);
+export const selectTicketDetail = createSelector(selectQueueState, (state) => state.ticketDetail);
+export const selectOpenedRevision = createSelector(selectQueueState, (state) => state.openedRevision);
+export const selectTicketVersionConflict = createSelector(selectQueueState, (state) => state.ticketVersionConflict);
 export const selectTicketDialog = createSelector(selectQueueState, (state) => state.ticketDialog);
 export const selectWorkflowDraft = createSelector(selectQueueState, (state) => state.workflowDraft);
 export const selectToast = createSelector(selectQueueState, (state) => state.toast);
@@ -99,15 +100,17 @@ export const selectMyTickets = createSelector(
 );
 
 export const selectSelectedTicketComments = createSelector(
-  selectData,
-  selectDetailTicketId,
-  (data, ticketId) => commentsForTicket(data, ticketId)
+  selectTicketDetail,
+  (detail) => detail?.comments ?? []
 );
 
-export const selectSelectedTicketChanges = createSelector(
-  selectData,
-  selectDetailTicketId,
-  (data, ticketId) => changesForTicket(data, ticketId)
+export const selectSelectedTicketRevisions = createSelector(
+  selectTicketDetail,
+  (detail) => detail?.revisions ?? {revisions: [], nextBeforeVersion: null}
+);
+export const selectSelectedTicketLegacyChanges = createSelector(
+  selectTicketDetail,
+  (detail) => detail?.legacyChanges ?? []
 );
 
 export const selectUrlQueryParams = createSelector(
@@ -149,9 +152,10 @@ export const selectMyTicketsSavedFilters = createSelector(
 );
 
 export const selectSelectedTicket = createSelector(
+  selectTicketDetail,
   selectData,
   selectDetailTicketId,
-  (data, ticketId) => data?.tickets.find((ticket) => ticket.id === ticketId) ?? null
+  (detail, data, ticketId) => detail?.ticket ?? data?.tickets.find((ticket) => ticket.id === ticketId) ?? null
 );
 
 export const selectSelectedTicketWorkflow = createSelector(
@@ -277,16 +281,4 @@ function projectKey(projects: Project[], projectId: string): string {
 
 function priorityRank(priority: Priority): number {
   return ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].indexOf(priority);
-}
-
-function commentsForTicket(data: BootstrapResponse | null, ticketId: string | null): TicketComment[] {
-  return [...(data?.comments ?? [])]
-    .filter((comment) => comment.ticketId === ticketId)
-    .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
-}
-
-function changesForTicket(data: BootstrapResponse | null, ticketId: string | null): TicketChange[] {
-  return [...(data?.ticketChanges ?? [])]
-    .filter((change) => change.ticketId === ticketId)
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }

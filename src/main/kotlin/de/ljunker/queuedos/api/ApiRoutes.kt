@@ -81,6 +81,31 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 call.respond(services.queries.ticketDetail(call.actor(), call.pathId()).toResponse())
             }
 
+            get("/api/tickets/{id}/revisions") {
+                val beforeVersion = call.request.queryParameters["beforeVersion"]?.toLongOrNull()
+                val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
+                call.respond(services.queries.revisions(call.actor(), call.pathId(), beforeVersion, limit).toResponse())
+            }
+
+            get("/api/tickets/{id}/revisions/{version}") {
+                val version = call.parameters["version"]?.toLongOrNull()
+                    ?: throw BadRequestFailure("Invalid ticket revision version.")
+                call.respond(services.queries.revision(call.actor(), call.pathId(), version).toDetailResponse())
+            }
+
+            post("/api/tickets/{id}/revisions/{version}/restore") {
+                val version = call.parameters["version"]?.toLongOrNull()
+                    ?: throw BadRequestFailure("Invalid ticket revision version.")
+                call.respond(
+                    services.tickets.restoreRevision(
+                        call.actor(),
+                        call.pathId(),
+                        version,
+                        RestoreTicketCommand(call.receive<RestoreTicketRequest>().expectedVersion)
+                    ).toResponse()
+                )
+            }
+
             post("/api/tickets") {
                 call.respond(
                     HttpStatusCode.Created,
@@ -137,12 +162,20 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
             }
 
             delete("/api/tickets/{id}") {
-                services.tickets.delete(call.actor(), call.pathId())
+                val expectedVersion = call.request.queryParameters["expectedVersion"]?.toLongOrNull()
+                    ?: throw BadRequestFailure("expectedVersion is required.")
+                services.tickets.delete(call.actor(), call.pathId(), expectedVersion)
                 call.respond(HttpStatusCode.NoContent)
             }
 
             post("/api/tickets/{id}/restore") {
-                call.respond(services.tickets.restore(call.actor(), call.pathId()).toResponse())
+                call.respond(
+                    services.tickets.restore(
+                        call.actor(),
+                        call.pathId(),
+                        RestoreTicketCommand(call.receive<RestoreTicketRequest>().expectedVersion)
+                    ).toResponse()
+                )
             }
 
             post("/api/projects") {

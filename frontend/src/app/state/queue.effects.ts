@@ -9,7 +9,7 @@ import {ApiClientService} from '../core/api-client.service';
 import {AuthTokenService} from '../core/auth-token.service';
 import {ThemeService} from '../core/theme.service';
 import {QueueActions} from './queue.actions';
-import {selectTheme, selectUrlQueryParams} from './queue.selectors';
+import {selectDetailTicketId, selectTheme, selectUrlQueryParams} from './queue.selectors';
 
 @Injectable()
 export class QueueEffects {
@@ -90,6 +90,52 @@ export class QueueEffects {
     )
   );
 
+  readonly openTicketDetail$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.ticketDetailOpened),
+      map(({ticketId}) => QueueActions.ticketDetailLoadRequested({ticketId}))
+    )
+  );
+
+  readonly loadTicketDetail$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.ticketDetailLoadRequested),
+      switchMap(({ticketId}) => this.api.ticketDetail(ticketId).pipe(
+        map((detail) => QueueActions.ticketDetailLoadSucceeded({detail})),
+        catchError((error: unknown) => of(QueueActions.ticketDetailLoadFailed({error: errorMessage(error, 'Ticket details could not be loaded.')})))
+      ))
+    )
+  );
+
+  readonly loadTicketFromRoute$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.bootstrapSucceeded),
+      withLatestFrom(this.store.select(selectDetailTicketId)),
+      filter(([, ticketId]) => Boolean(ticketId)),
+      map(([, ticketId]) => QueueActions.ticketDetailLoadRequested({ticketId: ticketId!}))
+    )
+  );
+
+  readonly loadOlderRevisions$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.olderRevisionsRequested),
+      concatMap(({ticketId, beforeVersion}) => this.api.ticketRevisions(ticketId, beforeVersion).pipe(
+        map((page) => QueueActions.olderRevisionsLoaded(page)),
+        catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Older revisions could not be loaded.')})))
+      ))
+    )
+  );
+
+  readonly openRevision$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.revisionOpenRequested),
+      switchMap(({ticketId, version}) => this.api.ticketRevision(ticketId, version).pipe(
+        map((detail) => QueueActions.revisionOpened({detail})),
+        catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Revision could not be loaded.')})))
+      ))
+    )
+  );
+
   readonly createTicket$ = createEffect(() =>
     this.actions$.pipe(
       ofType(QueueActions.ticketCreateRequested),
@@ -102,20 +148,29 @@ export class QueueEffects {
     )
   );
 
+  readonly reloadTicketAfterConflict$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.ticketConflictReloadRequested),
+      map(({ticketId}) => QueueActions.ticketDetailLoadRequested({ticketId}))
+    )
+  );
+
+  readonly fetchTicketAfterConflict$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.ticketUpdateVersionConflict),
+      map(({save}) => QueueActions.ticketDetailLoadRequested({ticketId: save.id}))
+    )
+  );
+
   readonly updateTicket$ = createEffect(() =>
     this.actions$.pipe(
       ofType(QueueActions.ticketUpdateRequested),
-      concatMap(({ id, request, toStatusId }) =>
+      concatMap(({ id, request }) =>
         this.api.updateTicket(id, request).pipe(
-          switchMap((ticket) => {
-            if (ticket.statusId === toStatusId) {
-              return of(QueueActions.mutationSucceeded({ focusTicketId: ticket.id }));
-            }
-            return this.api.transitionTicket(id, { toStatusId }).pipe(
-              map(() => QueueActions.mutationSucceeded({ focusTicketId: id }))
-            );
-          }),
-          catchError((error: unknown) => of(QueueActions.mutationFailed({ error: errorMessage(error, 'Ticket could not be saved.') })))
+          map((ticket) => QueueActions.mutationSucceeded({ focusTicketId: ticket.id })),
+          catchError((error: unknown) => isVersionConflict(error)
+            ? of(QueueActions.ticketUpdateVersionConflict({save: {id, request}, currentVersion: conflictVersion(error)}))
+            : of(QueueActions.mutationFailed({ error: errorMessage(error, 'Ticket could not be saved.') })))
         )
       )
     )
@@ -125,7 +180,7 @@ export class QueueEffects {
     this.actions$.pipe(
       ofType(QueueActions.ticketTransitionRequested),
       concatMap(({ ticket, toStatusId }) =>
-        this.api.transitionTicket(ticket.id, { toStatusId }).pipe(
+        this.api.transitionTicket(ticket.id, { toStatusId, expectedVersion: ticket.version }).pipe(
             map(() => QueueActions.mutationSucceeded({})),
           catchError((error: unknown) => of(QueueActions.mutationFailed({ error: errorMessage(error, 'Transition failed.') })))
         )
@@ -136,8 +191,8 @@ export class QueueEffects {
   readonly deleteTicket$ = createEffect(() =>
     this.actions$.pipe(
       ofType(QueueActions.ticketDeleteRequested),
-      concatMap(({ ticketId }) =>
-        this.api.deleteTicket(ticketId).pipe(
+      concatMap(({ ticketId, expectedVersion }) =>
+        this.api.deleteTicket(ticketId, expectedVersion).pipe(
           map(() => QueueActions.mutationSucceeded({})),
           catchError((error: unknown) => of(QueueActions.mutationFailed({ error: errorMessage(error, 'Ticket could not be deleted.') })))
         )
@@ -148,8 +203,8 @@ export class QueueEffects {
   readonly restoreTicket$ = createEffect(() =>
       this.actions$.pipe(
           ofType(QueueActions.ticketRestoreRequested),
-          concatMap(({ticketId}) =>
-              this.api.restoreTicket(ticketId).pipe(
+          concatMap(({ticketId, expectedVersion}) =>
+              this.api.restoreTicket(ticketId, expectedVersion).pipe(
                   map((ticket) => QueueActions.mutationSucceeded({
                     message: 'Ticket restored.',
                     focusTicketId: ticket.id
@@ -163,10 +218,22 @@ export class QueueEffects {
   readonly saveCommitment$ = createEffect(() =>
       this.actions$.pipe(
           ofType(QueueActions.ticketCommitmentRequested),
-          concatMap(({ticketId, committed}) =>
-              this.api.saveCommitment(ticketId, committed).pipe(
+          concatMap(({ticketId, committed, expectedVersion}) =>
+              this.api.saveCommitment(ticketId, committed, expectedVersion).pipe(
                   map(() => QueueActions.mutationSucceeded({focusTicketId: ticketId})),
                   catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Commitment could not be saved.')})))
+        )
+      )
+    )
+  );
+
+  readonly restoreRevision$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.revisionRestoreRequested),
+      concatMap(({ticketId, version, expectedVersion}) =>
+        this.api.restoreTicketRevision(ticketId, version, expectedVersion).pipe(
+          map(() => QueueActions.mutationSucceeded({message: `Revision ${version} restored.`, focusTicketId: ticketId})),
+          catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Revision could not be restored.')})))
         )
       )
     )
@@ -361,6 +428,33 @@ export class QueueEffects {
     )
   );
 
+  readonly reloadAfterVersionFailure$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.mutationFailed),
+      filter(({error}) => error === 'Ticket was changed by another request.'),
+      map(() => QueueActions.bootstrapRequested())
+    )
+  );
+
+  readonly reloadDetailAfterVersionFailure$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.mutationFailed),
+      filter(({error}) => error === 'Ticket was changed by another request.'),
+      withLatestFrom(this.store.select(selectDetailTicketId)),
+      filter(([, ticketId]) => Boolean(ticketId)),
+      map(([, ticketId]) => QueueActions.ticketDetailLoadRequested({ticketId: ticketId!}))
+    )
+  );
+
+  readonly reloadDetailAfterMutation$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.mutationSucceeded),
+      withLatestFrom(this.store.select(selectDetailTicketId)),
+      filter(([, ticketId]) => Boolean(ticketId)),
+      map(([, ticketId]) => QueueActions.ticketDetailLoadRequested({ticketId: ticketId!}))
+    )
+  );
+
   readonly toastAfterMutation$ = createEffect(() =>
     this.actions$.pipe(
       ofType(QueueActions.mutationSucceeded),
@@ -422,4 +516,12 @@ function errorMessage(error: unknown, fallback: string): string {
     return error.error?.message ?? error.message ?? fallback;
   }
   return error instanceof Error ? error.message : fallback;
+}
+
+function isVersionConflict(error: unknown): error is HttpErrorResponse {
+  return error instanceof HttpErrorResponse && error.status === 409 && error.error?.code === 'TICKET_VERSION_CONFLICT';
+}
+
+function conflictVersion(error: HttpErrorResponse): number {
+  return Number(error.error?.currentVersion ?? 0);
 }

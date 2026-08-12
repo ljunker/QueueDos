@@ -16,6 +16,9 @@ import {
   Ticket,
   TicketChange,
   TicketComment,
+  TicketRevisionDetail,
+  TicketRevisionPage,
+  TicketRevisionSummary,
   TicketType,
   UpdateActivityHookRequest,
   UpdateUserRequest,
@@ -113,14 +116,21 @@ import {TicketListViewComponent} from './ticket-list-view.component';
           <qd-ticket-detail-view
             [ticket]="selectedTicket()"
             [comments]="selectedTicketComments()"
-            [changes]="selectedTicketChanges()"
+            [revisions]="selectedTicketRevisions()"
+            [legacyChanges]="selectedTicketLegacyChanges()"
+            [openedRevision]="openedRevision()"
             [workflow]="selectedTicketWorkflow()"
             [types]="selectedTicketTypes()"
             [users]="users()"
             [currentUser]="currentUser()"
+            [isAdmin]="isAdmin()"
             (closed)="detailClosed.emit()"
             (editRequested)="editRequested.emit($event)"
             (commitmentChanged)="commitmentChanged.emit($event)"
+            (revisionOpened)="revisionOpened.emit($event)"
+            (revisionClosed)="revisionClosed.emit()"
+            (olderRevisionsRequested)="olderRevisionsRequested.emit($event)"
+            (revisionRestoreRequested)="revisionRestoreRequested.emit($event)"
             (commentSubmitted)="commentSubmitted.emit({ ticketId: $event.ticketId, request: { body: $event.body } })" />
         }
         @case ('admin') {
@@ -179,7 +189,9 @@ export class WorkspaceTabHostComponent {
   readonly selectedTicketWorkflow = input<Workflow | null>(null);
   readonly selectedTicketTypes = input<TicketType[]>([]);
   readonly selectedTicketComments = input<TicketComment[]>([]);
-  readonly selectedTicketChanges = input<TicketChange[]>([]);
+  readonly selectedTicketRevisions = input<TicketRevisionPage>({revisions: [], nextBeforeVersion: null});
+  readonly selectedTicketLegacyChanges = input<TicketChange[]>([]);
+  readonly openedRevision = input<TicketRevisionDetail | null>(null);
   readonly workflowDraft = input<Workflow | null>(null);
   readonly projectSavedFilters = input<SavedTicketFilter[]>([]);
   readonly myTicketsSavedFilters = input<SavedTicketFilter[]>([]);
@@ -192,7 +204,11 @@ export class WorkspaceTabHostComponent {
   readonly detailClosed = output<void>();
   readonly editRequested = output<string>();
   readonly commentSubmitted = output<{ ticketId: string; request: CreateTicketCommentRequest }>();
-  readonly commitmentChanged = output<{ ticketId: string; committed: boolean }>();
+  readonly commitmentChanged = output<{ ticketId: string; committed: boolean; expectedVersion: number }>();
+  readonly revisionOpened = output<TicketRevisionSummary>();
+  readonly revisionClosed = output<void>();
+  readonly olderRevisionsRequested = output<number>();
+  readonly revisionRestoreRequested = output<{ticketId: string; version: number; expectedVersion: number}>();
   readonly projectCreated = output<CreateProjectRequest>();
   readonly projectSelected = output<string>();
   readonly userCreated = output<CreateUserRequest>();

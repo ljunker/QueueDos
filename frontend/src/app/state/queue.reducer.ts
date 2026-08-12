@@ -1,6 +1,6 @@
 import { createReducer, on } from '@ngrx/store';
 
-import { BootstrapResponse, Workflow } from '../core/api.models';
+import { BootstrapResponse, TicketDetailResponse, TicketRevisionDetail, Workflow } from '../core/api.models';
 import { QueueActions } from './queue.actions';
 import {
   cloneWorkflow,
@@ -13,6 +13,7 @@ import {
   ThemeMode,
   TicketDialogState,
   TicketFilters,
+  TicketVersionConflictState,
   WorkspaceTab
 } from './queue.models';
 
@@ -28,6 +29,9 @@ export interface QueueState {
   activeTab: WorkspaceTab;
   detailReturnTab: DetailReturnTab;
   detailTicketId: string | null;
+  ticketDetail: TicketDetailResponse | null;
+  openedRevision: TicketRevisionDetail | null;
+  ticketVersionConflict: TicketVersionConflictState | null;
   filters: TicketFilters;
   myTicketsFilters: MyTicketsFilters;
   ticketDialog: TicketDialogState | null;
@@ -47,6 +51,9 @@ export const initialState: QueueState = {
   activeTab: 'board',
   detailReturnTab: 'list',
   detailTicketId: null,
+  ticketDetail: null,
+  openedRevision: null,
+  ticketVersionConflict: null,
   filters: defaultFilters(),
   myTicketsFilters: defaultMyTicketsFilters(),
   ticketDialog: null,
@@ -118,6 +125,11 @@ export const queueReducer = createReducer(
       activeTab: activeTab === 'admin' && state.data && state.data.currentUser.role !== 'ADMIN' ? 'board' : activeTab,
       selectedProjectId,
       detailTicketId: routeState.detailTicketId !== undefined ? routeState.detailTicketId : state.detailTicketId,
+      ticketDetail:
+        routeState.detailTicketId !== undefined && routeState.detailTicketId !== state.detailTicketId
+          ? null
+          : state.ticketDetail,
+      openedRevision: null,
       filters: {
         ...state.filters,
         ...routeState.filters
@@ -134,6 +146,8 @@ export const queueReducer = createReducer(
     ...state,
     selectedProjectId: projectId,
     detailTicketId: null,
+    ticketDetail: null,
+    openedRevision: null,
     activeTab: state.activeTab === 'detail' ? 'board' : state.activeTab,
     workflowDraft: cloneWorkflow(workflowForProject(state.data, projectId))
   })),
@@ -146,12 +160,41 @@ export const queueReducer = createReducer(
     ...state,
     activeTab: 'detail',
     detailReturnTab: state.activeTab === 'detail' ? state.detailReturnTab : state.activeTab,
-    detailTicketId: ticketId
+    detailTicketId: ticketId,
+    ticketDetail: state.ticketDetail?.ticket.id === ticketId ? state.ticketDetail : null,
+    openedRevision: null
   })),
+  on(QueueActions.ticketDetailLoadSucceeded, (state, { detail }) => ({
+    ...state,
+    ticketDetail: detail,
+    data: state.data
+      ? {
+          ...state.data,
+          tickets: state.data.tickets.map((ticket) => ticket.id === detail.ticket.id ? detail.ticket : ticket)
+        }
+      : state.data
+  })),
+  on(QueueActions.olderRevisionsLoaded, (state, { revisions, nextBeforeVersion }) => {
+    if (!state.ticketDetail) return state;
+    return {
+      ...state,
+      ticketDetail: {
+        ...state.ticketDetail,
+        revisions: {
+          revisions: [...state.ticketDetail.revisions.revisions, ...revisions],
+          nextBeforeVersion
+        }
+      }
+    };
+  }),
+  on(QueueActions.revisionOpened, (state, { detail }) => ({...state, openedRevision: detail})),
+  on(QueueActions.revisionClosed, (state) => ({...state, openedRevision: null})),
   on(QueueActions.detailClosed, (state) => ({
     ...state,
     activeTab: state.detailReturnTab,
-    detailTicketId: null
+    detailTicketId: null,
+    ticketDetail: null,
+    openedRevision: null
   })),
   on(QueueActions.filtersChanged, (state, { filters }) => ({
     ...state,
@@ -194,11 +237,20 @@ export const queueReducer = createReducer(
   })),
   on(QueueActions.ticketDialogClosed, (state) => ({
     ...state,
-    ticketDialog: null
+    ticketDialog: null,
+    ticketVersionConflict: null
   })),
+  on(QueueActions.ticketUpdateVersionConflict, (state, conflict) => ({
+    ...state,
+    ticketVersionConflict: conflict,
+    toast: 'This ticket changed while you were editing it.'
+  })),
+  on(QueueActions.ticketConflictDismissed, (state) => ({...state, ticketVersionConflict: null})),
+  on(QueueActions.ticketConflictReloadRequested, (state) => ({...state, ticketVersionConflict: null})),
   on(QueueActions.mutationSucceeded, (state, { focusTicketId }) => ({
     ...state,
     ticketDialog: null,
+    ticketVersionConflict: null,
     detailTicketId: focusTicketId ?? state.detailTicketId,
     activeTab: focusTicketId ? 'detail' : state.activeTab,
     detailReturnTab:

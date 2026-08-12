@@ -7,6 +7,7 @@ import de.ljunker.queuedos.persistence.defaultTicketTypes
 import de.ljunker.queuedos.persistence.defaultWorkflow
 import de.ljunker.queuedos.security.*
 import de.ljunker.queuedos.validation.*
+import kotlinx.serialization.json.*
 import java.time.Instant
 import java.util.*
 
@@ -82,8 +83,6 @@ class WorkspaceQueryService(
                 } else {
                     emptyList()
                 },
-                comments = repositories.tickets.comments(actor.organizationId),
-                changes = repositories.tickets.changes(actor.organizationId),
                 savedTicketFilters = repositories.savedTicketFilters.listForOwner(actor.organizationId, actor.id),
                 activityHooks = if (actor.role == Role.ADMIN) {
                     repositories.activityHooks.listByOrganization(actor.organizationId)
@@ -153,9 +152,42 @@ class WorkspaceQueryService(
             TicketDetailData(
                 ticket = ticket,
                 comments = repositories.tickets.comments(actor.organizationId, ticket.id),
-                changes = repositories.tickets.changes(actor.organizationId, ticket.id)
+                revisions = revisionPage(actor, ticket.id, null, 50),
+                legacyChanges = repositories.tickets.changes(actor.organizationId, ticket.id)
             )
         }
+
+    fun revisions(actor: User, ticketId: String, beforeVersion: Long?, requestedLimit: Int): TicketRevisionPage =
+        transactions.inTransaction {
+            requireReadableTicket(actor, ticketId)
+            revisionPage(actor, ticketId, beforeVersion, requestedLimit)
+        }
+
+    fun revision(actor: User, ticketId: String, version: Long): TicketRevision =
+        transactions.inTransaction {
+            requireReadableTicket(actor, ticketId)
+            repositories.tickets.findRevision(actor.organizationId, ticketId, version)
+                ?: throw NotFoundFailure("Ticket revision not found.")
+        }
+
+    private fun revisionPage(
+        actor: User,
+        ticketId: String,
+        beforeVersion: Long?,
+        requestedLimit: Int
+    ): TicketRevisionPage {
+        val limit = requestedLimit.coerceIn(1, 100)
+        val rows = repositories.tickets.revisions(actor.organizationId, ticketId, beforeVersion, limit + 1)
+        val page = rows.take(limit)
+        return TicketRevisionPage(page, if (rows.size > limit) page.lastOrNull()?.version else null)
+    }
+
+    private fun requireReadableTicket(actor: User, ticketId: String): Ticket {
+        val ticket = repositories.tickets.findIncludingDeleted(actor.organizationId, ticketId)
+            ?: throw NotFoundFailure("Ticket not found.")
+        if (ticket.deletedAt != null && actor.role != Role.ADMIN) throw NotFoundFailure("Ticket not found.")
+        return ticket
+    }
 
     private fun requireTicket(actor: User, ticketId: String): Ticket =
         repositories.tickets.findById(actor.organizationId, ticketId)
@@ -388,9 +420,7 @@ class TicketService(
             )
             repositories.projects.update(project.copy(nextTicketNumber = project.nextTicketNumber + 1))
             repositories.tickets.insert(ticket)
-            repositories.tickets.insertChanges(
-                listOf(ticketChange(actor, ticket, "ticket", null, "created", timestamp))
-            )
+            repositories.tickets.insertRevision(ticketRevision(actor, ticket, TicketRevisionAction.CREATED, emptyList(), timestamp))
             ticket
         }
         activityNotifier.publish(TicketActivity(ActivityEventType.TICKET_CREATED, ticket, actor))
@@ -398,42 +428,91 @@ class TicketService(
     }
 
     fun update(actor: User, ticketId: String, command: UpdateTicketCommand): Ticket {
+        var changed = false
+        var previousStatusId: String? = null
         val ticket = transactions.inTransaction {
             val current = requireTicket(actor, ticketId)
+            requireVersion(current, command.expectedVersion)
             val project = requireProject(actor, current.projectId)
             if (project.archived) {
                 throw ConflictFailure("Archived project tickets cannot be edited.")
             }
             val typeId = command.typeId ?: current.typeId
             requireTicketTypeForProject(actor, typeId, project.id)
+            if (command.clearAssignee && !command.assigneeId.isNullOrBlank()) {
+                throw BadRequestFailure("Ticket update cannot set and clear an assignee at once.")
+            }
             val assigneeId = command.assigneeId?.takeIf { it.isNotBlank() }
-            requireAssignee(actor, assigneeId)
-            val timestamp = now()
-            val updated = current.copy(
+            val targetStatusId = command.statusId?.takeIf(String::isNotBlank) ?: current.statusId
+            val candidate = current.copy(
                 title = command.title?.let { requireName(it, "Ticket title") } ?: current.title,
                 description = command.description?.trim() ?: current.description,
                 typeId = typeId,
                 priority = command.priority ?: current.priority,
-                assigneeId = if (command.assigneeId == null) current.assigneeId else assigneeId,
+                assigneeId = when {
+                    command.clearAssignee -> null
+                    command.assigneeId == null -> current.assigneeId
+                    else -> assigneeId
+                },
                 labels = command.labels?.let(::normalizeLabels) ?: current.labels,
                 dueDate = if (command.clearDueDate) null else command.dueDate?.let(::normalizeDueDate)
                     ?: current.dueDate,
                 estimate = if (command.clearEstimate) null else command.estimate?.let(::normalizeEstimate)
-                    ?: current.estimate,
-                updatedAt = timestamp
+                    ?: current.estimate
             )
-            repositories.tickets.update(updated)
-            repositories.tickets.insertChanges(ticketChanges(actor, current, updated, timestamp))
+            if (candidate.assigneeId != current.assigneeId) requireAssignee(actor, candidate.assigneeId)
+            if (targetStatusId != current.statusId) {
+                val workflow = requireWorkflow(actor, project.id)
+                when (transitionEvaluator.resolve(workflow, candidate, targetStatusId, actor.role)) {
+                    WorkflowTransitionResolution.Allowed -> Unit
+                    WorkflowTransitionResolution.Unchanged -> Unit
+                    WorkflowTransitionResolution.MissingStatus -> throw NotFoundFailure("Workflow status not found.")
+                    WorkflowTransitionResolution.NotAllowed -> throw ConflictFailure("This workflow transition is not allowed.")
+                    WorkflowTransitionResolution.RoleDenied -> throw ForbiddenFailure("Your role cannot perform this workflow transition.")
+                    WorkflowTransitionResolution.BackwardDenied -> throw ConflictFailure("This workflow transition cannot move tickets backwards.")
+                }
+            }
+            val withoutMetadata = candidate.copy(statusId = targetStatusId)
+            val changes = revisionChanges(current, withoutMetadata)
+            if (changes.isEmpty()) return@inTransaction current
+            changed = true
+            previousStatusId = current.statusId
+            val timestamp = now()
+            val updated = withoutMetadata.copy(updatedAt = timestamp, version = current.version + 1)
+            updateVersioned(actor, current, updated)
+            repositories.tickets.insertRevision(
+                ticketRevision(
+                    actor,
+                    updated,
+                    if (changes.size == 1 && changes.single().field == "statusId") TicketRevisionAction.MOVED
+                    else TicketRevisionAction.UPDATED,
+                    changes,
+                    timestamp
+                )
+            )
             updated
         }
-        activityNotifier.publish(TicketActivity(ActivityEventType.TICKET_UPDATED, ticket, actor))
+        if (changed) {
+            if (previousStatusId != ticket.statusId) {
+                activityNotifier.publish(
+                    TicketActivity(
+                        ActivityEventType.TICKET_MOVED,
+                        ticket,
+                        actor,
+                        mapOf("fromStatusId" to previousStatusId.orEmpty(), "toStatusId" to ticket.statusId)
+                    )
+                )
+            } else {
+                activityNotifier.publish(TicketActivity(ActivityEventType.TICKET_UPDATED, ticket, actor))
+            }
+        }
         return ticket
     }
 
     fun bulkUpdate(actor: User, command: BulkUpdateTicketsCommand): List<Ticket> =
         transactions.inTransaction {
-            val ticketIds = command.ticketIds.map { it.trim() }.filter { it.isNotBlank() }.distinct()
-            if (ticketIds.isEmpty()) throw BadRequestFailure("At least one ticket is required.")
+            val refs = command.tickets.map { it.copy(id = it.id.trim()) }.filter { it.id.isNotBlank() }.distinctBy { it.id }
+            if (refs.isEmpty()) throw BadRequestFailure("At least one ticket is required.")
             if (command.clearAssignee && !command.assigneeId.isNullOrBlank()) {
                 throw BadRequestFailure("Bulk update cannot set and clear an assignee at once.")
             }
@@ -442,8 +521,9 @@ class TicketService(
                 throw BadRequestFailure("Bulk update needs an assignee or priority change.")
             }
             requireAssignee(actor, assigneeId)
-            val currentTickets = ticketIds.map { ticketId ->
-                val ticket = requireTicket(actor, ticketId)
+            val currentTickets = refs.map { ref ->
+                val ticket = requireTicket(actor, ref.id)
+                requireVersion(ticket, ref.expectedVersion)
                 if (requireProject(actor, ticket.projectId).archived) {
                     throw ConflictFailure("Archived project tickets cannot be edited.")
                 }
@@ -451,21 +531,21 @@ class TicketService(
             }
             val timestamp = now()
             currentTickets.map { ticket ->
-                ticket.copy(
+                val candidate = ticket.copy(
                     priority = command.priority ?: ticket.priority,
                     assigneeId = when {
                         command.clearAssignee -> null
                         assigneeId != null -> assigneeId
                         else -> ticket.assigneeId
-                    },
-                    updatedAt = timestamp
+                    }
                 )
-            }.also { updated ->
-                updated.forEach(repositories.tickets::update)
-                repositories.tickets.insertChanges(
-                    currentTickets.zip(updated)
-                        .flatMap { (current, next) -> ticketChanges(actor, current, next, timestamp) }
-                )
+                val changes = revisionChanges(ticket, candidate)
+                if (changes.isEmpty()) ticket else candidate.copy(updatedAt = timestamp, version = ticket.version + 1).also { updated ->
+                    updateVersioned(actor, ticket, updated)
+                    repositories.tickets.insertRevision(
+                        ticketRevision(actor, updated, TicketRevisionAction.UPDATED, changes, timestamp)
+                    )
+                }
             }
         }
 
@@ -473,6 +553,7 @@ class TicketService(
         var previousStatusId = ""
         val ticket = transactions.inTransaction {
             val current = requireTicket(actor, ticketId)
+            requireVersion(current, command.expectedVersion)
             previousStatusId = current.statusId
             val project = requireProject(actor, current.projectId)
             if (project.archived) {
@@ -488,10 +569,10 @@ class TicketService(
                 WorkflowTransitionResolution.BackwardDenied -> throw ConflictFailure("This workflow transition cannot move tickets backwards.")
             }
             val timestamp = now()
-            current.copy(statusId = command.toStatusId, updatedAt = timestamp).also { updated ->
-                repositories.tickets.update(updated)
-                repositories.tickets.insertChanges(
-                    listOf(ticketChange(actor, current, "statusId", current.statusId, command.toStatusId, timestamp))
+            current.copy(statusId = command.toStatusId, updatedAt = timestamp, version = current.version + 1).also { updated ->
+                updateVersioned(actor, current, updated)
+                repositories.tickets.insertRevision(
+                    ticketRevision(actor, updated, TicketRevisionAction.MOVED, revisionChanges(current, updated), timestamp)
                 )
             }
         }
@@ -522,9 +603,6 @@ class TicketService(
                 createdAt = timestamp
             ).also { comment ->
                 repositories.tickets.insertComment(comment)
-                repositories.tickets.insertChanges(
-                    listOf(ticketChange(actor, ticket, "comment", null, "added", timestamp))
-                )
             }
         }
         activityNotifier.publish(
@@ -533,30 +611,42 @@ class TicketService(
         return comment
     }
 
-    fun delete(actor: User, ticketId: String) {
+    fun delete(actor: User, ticketId: String, expectedVersion: Long) {
         val ticket = transactions.inTransaction {
             AuthorizationPolicies.requireAdmin(actor)
             val current = requireTicket(actor, ticketId)
+            requireVersion(current, expectedVersion)
             val timestamp = now()
-            current.copy(updatedAt = timestamp, deletedAt = timestamp, deletedById = actor.id).also { deleted ->
-                repositories.tickets.update(deleted)
-                repositories.tickets.insertChanges(
-                    listOf(ticketChange(actor, current, "deletedAt", null, timestamp, timestamp))
+            current.copy(
+                updatedAt = timestamp,
+                deletedAt = timestamp,
+                deletedById = actor.id,
+                version = current.version + 1
+            ).also { deleted ->
+                updateVersioned(actor, current, deleted)
+                repositories.tickets.insertRevision(
+                    ticketRevision(actor, deleted, TicketRevisionAction.DELETED, revisionChanges(current, deleted), timestamp)
                 )
             }
         }
         activityNotifier.publish(TicketActivity(ActivityEventType.TICKET_DELETED, ticket, actor))
     }
 
-    fun restore(actor: User, ticketId: String): Ticket {
+    fun restore(actor: User, ticketId: String, command: RestoreTicketCommand): Ticket {
         val ticket = transactions.inTransaction {
             AuthorizationPolicies.requireAdmin(actor)
             val current = requireDeletedTicket(actor, ticketId)
+            requireVersion(current, command.expectedVersion)
             val timestamp = now()
-            current.copy(updatedAt = timestamp, deletedAt = null, deletedById = null).also { restored ->
-                repositories.tickets.update(restored)
-                repositories.tickets.insertChanges(
-                    listOf(ticketChange(actor, restored, "deletedAt", current.deletedAt, null, timestamp))
+            current.copy(
+                updatedAt = timestamp,
+                deletedAt = null,
+                deletedById = null,
+                version = current.version + 1
+            ).also { restored ->
+                updateVersioned(actor, current, restored)
+                repositories.tickets.insertRevision(
+                    ticketRevision(actor, restored, TicketRevisionAction.RESTORED, revisionChanges(current, restored), timestamp)
                 )
             }
         }
@@ -567,6 +657,7 @@ class TicketService(
     fun saveCommitment(actor: User, ticketId: String, command: SaveTicketCommitmentCommand): Ticket {
         val ticket = transactions.inTransaction {
             val current = requireTicket(actor, ticketId)
+            requireVersion(current, command.expectedVersion)
             if (requireProject(actor, current.projectId).archived) {
                 throw ConflictFailure("Archived project tickets cannot be edited.")
             }
@@ -574,26 +665,24 @@ class TicketService(
                 return@inTransaction current
             }
             val timestamp = now()
-            repositories.tickets.setCommitment(current.id, actor.id, command.committed)
             val updated = current.copy(
                 committedUserIds = if (command.committed) {
                     (current.committedUserIds + actor.id).distinct().sorted()
                 } else {
                     current.committedUserIds - actor.id
                 },
-                updatedAt = timestamp
+                updatedAt = timestamp,
+                version = current.version + 1
             )
-            repositories.tickets.update(updated)
-            repositories.tickets.insertChanges(
-                listOf(
-                    ticketChange(
-                        actor,
-                        updated,
-                        "commitment",
-                        if (command.committed) null else actor.id,
-                        if (command.committed) actor.id else null,
-                        timestamp
-                    )
+            repositories.tickets.setCommitment(current.id, actor.id, command.committed)
+            updateVersioned(actor, current, updated)
+            repositories.tickets.insertRevision(
+                ticketRevision(
+                    actor,
+                    updated,
+                    TicketRevisionAction.COMMITMENT_CHANGED,
+                    revisionChanges(current, updated),
+                    timestamp
                 )
             )
             updated
@@ -607,6 +696,74 @@ class TicketService(
             )
         )
         return ticket
+    }
+
+    fun restoreRevision(actor: User, ticketId: String, version: Long, command: RestoreTicketCommand): Ticket {
+        var wasDeleted = false
+        val restored = transactions.inTransaction {
+            AuthorizationPolicies.requireAdmin(actor)
+            val current = repositories.tickets.findIncludingDeletedForUpdate(actor.organizationId, ticketId)
+                ?: throw NotFoundFailure("Ticket not found.")
+            requireVersion(current, command.expectedVersion)
+            val revision = repositories.tickets.findRevision(actor.organizationId, ticketId, version)
+                ?: throw NotFoundFailure("Ticket revision not found.")
+            val snapshot = revision.snapshot
+            if (snapshot.deletedAt != null) {
+                throw ConflictFailure("Deleted ticket revisions cannot be restored.")
+            }
+            val project = requireProject(actor, current.projectId)
+            if (project.archived) throw ConflictFailure("Archived project tickets cannot be restored from a revision.")
+            val workflow = requireWorkflow(actor, current.projectId)
+            if (workflow.statuses.none { it.id == snapshot.statusId }) {
+                throw ConflictFailure("The revision references a workflow status that is no longer available.")
+            }
+            if (repositories.ticketTypes.findForProject(actor.organizationId, current.projectId, snapshot.typeId) == null) {
+                throw ConflictFailure("The revision references a ticket type that is no longer available.")
+            }
+            validateRestoreUser(actor, snapshot.assigneeId, "assignee")
+            snapshot.committedUserIds.forEach { validateRestoreUser(actor, it, "committed user") }
+
+            wasDeleted = current.deletedAt != null
+            val timestamp = now()
+            val candidate = current.copy(
+                title = snapshot.title,
+                description = snapshot.description,
+                statusId = snapshot.statusId,
+                typeId = snapshot.typeId,
+                priority = snapshot.priority,
+                assigneeId = snapshot.assigneeId,
+                committedUserIds = snapshot.committedUserIds.distinct().sorted(),
+                labels = snapshot.labels,
+                dueDate = snapshot.dueDate,
+                estimate = snapshot.estimate,
+                updatedAt = timestamp,
+                deletedAt = null,
+                deletedById = null,
+                version = current.version + 1
+            )
+            val changes = revisionChanges(current, candidate)
+            updateVersioned(actor, current, candidate)
+            repositories.tickets.replaceCommitments(candidate.id, candidate.committedUserIds)
+            repositories.tickets.insertRevision(
+                ticketRevision(
+                    actor,
+                    candidate,
+                    TicketRevisionAction.REVISION_RESTORED,
+                    changes,
+                    timestamp,
+                    sourceVersion = version
+                )
+            )
+            candidate
+        }
+        activityNotifier.publish(
+            TicketActivity(
+                if (wasDeleted) ActivityEventType.TICKET_RESTORED else ActivityEventType.TICKET_UPDATED,
+                restored,
+                actor
+            )
+        )
+        return restored
     }
 
     private fun requireProject(actor: User, projectId: String): Project =
@@ -638,6 +795,24 @@ class TicketService(
         val assignee = repositories.users.findById(actor.organizationId, assigneeId)
         if (assignee?.active != true) {
             throw NotFoundFailure("Assignee not found.")
+        }
+    }
+
+    private fun validateRestoreUser(actor: User, userId: String?, label: String) {
+        if (userId == null) return
+        if (repositories.users.findById(actor.organizationId, userId)?.active != true) {
+            throw ConflictFailure("The revision references a $label that is no longer active.")
+        }
+    }
+
+    private fun requireVersion(ticket: Ticket, expectedVersion: Long) {
+        if (ticket.version != expectedVersion) throw TicketVersionConflictFailure(ticket.version)
+    }
+
+    private fun updateVersioned(actor: User, current: Ticket, updated: Ticket) {
+        if (!repositories.tickets.updateVersioned(updated, current.version)) {
+            val latest = repositories.tickets.findIncludingDeleted(actor.organizationId, current.id)
+            throw TicketVersionConflictFailure(latest?.version ?: current.version)
         }
     }
 }
@@ -807,54 +982,56 @@ class SavedTicketFilterService(
     }
 }
 
-private fun ticketChanges(actor: User, current: Ticket, updated: Ticket, createdAt: String): List<TicketChange> =
+private fun revisionChanges(current: Ticket, updated: Ticket): List<TicketRevisionChange> =
     buildList {
-        addIfChanged(actor, current, "title", current.title, updated.title, createdAt)
-        addIfChanged(actor, current, "description", current.description, updated.description, createdAt)
-        addIfChanged(actor, current, "typeId", current.typeId, updated.typeId, createdAt)
-        addIfChanged(actor, current, "priority", current.priority.name, updated.priority.name, createdAt)
-        addIfChanged(actor, current, "assigneeId", current.assigneeId, updated.assigneeId, createdAt)
-        addIfChanged(
-            actor,
-            current,
-            "labels",
-            current.labels.joinToString(","),
-            updated.labels.joinToString(","),
-            createdAt
-        )
-        addIfChanged(actor, current, "dueDate", current.dueDate, updated.dueDate, createdAt)
-        addIfChanged(actor, current, "estimate", current.estimate?.toString(), updated.estimate?.toString(), createdAt)
+        addRevisionChange("title", current.title.json(), updated.title.json())
+        addRevisionChange("description", current.description.json(), updated.description.json())
+        addRevisionChange("statusId", current.statusId.json(), updated.statusId.json())
+        addRevisionChange("typeId", current.typeId.json(), updated.typeId.json())
+        addRevisionChange("priority", current.priority.name.json(), updated.priority.name.json())
+        addRevisionChange("assigneeId", current.assigneeId.json(), updated.assigneeId.json())
+        addRevisionChange("committedUserIds", current.committedUserIds.json(), updated.committedUserIds.json())
+        addRevisionChange("labels", current.labels.json(), updated.labels.json())
+        addRevisionChange("dueDate", current.dueDate.json(), updated.dueDate.json())
+        addRevisionChange("estimate", current.estimate.json(), updated.estimate.json())
+        addRevisionChange("deletedAt", current.deletedAt.json(), updated.deletedAt.json())
+        addRevisionChange("deletedById", current.deletedById.json(), updated.deletedById.json())
     }
 
-private fun MutableList<TicketChange>.addIfChanged(
-    actor: User,
-    ticket: Ticket,
+private fun MutableList<TicketRevisionChange>.addRevisionChange(
     field: String,
-    oldValue: String?,
-    newValue: String?,
-    createdAt: String
+    oldValue: JsonElement,
+    newValue: JsonElement
 ) {
-    if (oldValue != newValue) add(ticketChange(actor, ticket, field, oldValue, newValue, createdAt))
+    if (oldValue != newValue) add(TicketRevisionChange(field, oldValue, newValue))
 }
 
-private fun ticketChange(
+private fun ticketRevision(
     actor: User,
     ticket: Ticket,
-    field: String,
-    oldValue: String?,
-    newValue: String?,
-    createdAt: String
-): TicketChange =
-    TicketChange(
-        id = id("change"),
+    action: TicketRevisionAction,
+    changes: List<TicketRevisionChange>,
+    createdAt: String,
+    sourceVersion: Long? = null
+): TicketRevision =
+    TicketRevision(
+        id = id("revision"),
         organizationId = actor.organizationId,
         ticketId = ticket.id,
         actorId = actor.id,
-        field = field,
-        oldValue = oldValue,
-        newValue = newValue,
+        version = ticket.version,
+        action = action,
+        sourceVersion = sourceVersion,
+        snapshot = ticket,
+        changes = changes,
         createdAt = createdAt
     )
+
+private fun String?.json(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
+
+private fun Int?.json(): JsonElement = this?.let(::JsonPrimitive) ?: JsonNull
+
+private fun List<String>.json(): JsonElement = JsonArray(map(::JsonPrimitive))
 
 private fun id(prefix: String): String = "$prefix-${UUID.randomUUID()}"
 

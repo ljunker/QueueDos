@@ -51,13 +51,20 @@ interface TicketRepository {
     fun listDeletedByOrganization(organizationId: String): List<Ticket>
     fun findById(organizationId: String, ticketId: String): Ticket?
     fun findDeletedById(organizationId: String, ticketId: String): Ticket?
+    fun findIncludingDeletedForUpdate(organizationId: String, ticketId: String): Ticket?
+    fun findIncludingDeleted(organizationId: String, ticketId: String): Ticket?
     fun insert(ticket: Ticket)
     fun update(ticket: Ticket)
+    fun updateVersioned(ticket: Ticket, expectedVersion: Long): Boolean
     fun setCommitment(ticketId: String, userId: String, committed: Boolean)
+    fun replaceCommitments(ticketId: String, userIds: List<String>)
     fun comments(organizationId: String, ticketId: String? = null): List<TicketComment>
     fun changes(organizationId: String, ticketId: String? = null): List<TicketChange>
+    fun revisions(organizationId: String, ticketId: String, beforeVersion: Long?, limit: Int): List<TicketRevision>
+    fun findRevision(organizationId: String, ticketId: String, version: Long): TicketRevision?
     fun insertComment(comment: TicketComment)
     fun insertChanges(changes: List<TicketChange>)
+    fun insertRevision(revision: TicketRevision)
 }
 
 interface ActivityHookRepository {

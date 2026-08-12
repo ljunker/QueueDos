@@ -155,17 +155,17 @@ export class TicketTableComponent {
   protected assign(): void {
     const assigneeId = this.assigneeId();
     if (!assigneeId) return;
-    this.emitBulkUpdate({ ticketIds: this.selectedTicketIds(), assigneeId });
+    this.emitBulkUpdate({ tickets: this.selectedTickets(), assigneeId });
   }
 
   protected clearAssignee(): void {
-    this.emitBulkUpdate({ ticketIds: this.selectedTicketIds(), clearAssignee: true });
+    this.emitBulkUpdate({ tickets: this.selectedTickets(), clearAssignee: true });
   }
 
   protected setPriority(): void {
     const priority = this.priority();
     if (!priority) return;
-    this.emitBulkUpdate({ ticketIds: this.selectedTicketIds(), priority });
+    this.emitBulkUpdate({ tickets: this.selectedTickets(), priority });
   }
 
   protected projectById(projectId: string): Project | null {
@@ -195,8 +195,14 @@ export class TicketTableComponent {
   }
 
   private emitBulkUpdate(request: BulkUpdateTicketsRequest): void {
-    if (!request.ticketIds.length) return;
+    if (!request.tickets.length) return;
     this.bulkUpdateRequested.emit(request);
     this.selectedIds.set(new Set());
+  }
+
+  private selectedTickets(): {id: string; expectedVersion: number}[] {
+    return this.tickets()
+      .filter((ticket) => this.selectedIds().has(ticket.id))
+      .map((ticket) => ({id: ticket.id, expectedVersion: ticket.version}));
   }
 }
