@@ -13,6 +13,7 @@ import {
 import {SidebarComponent} from '../../shared/organisms/sidebar.component';
 import {TicketDialogComponent} from '../../shared/organisms/ticket-dialog.component';
 import {ToastComponent} from '../../shared/atoms/toast.component';
+import {ProjectWizardComponent} from '../../shared/organisms/project-wizard.component';
 import {WorkspaceTabHostComponent} from '../../shared/organisms/workspace-tab-host.component';
 import {WorkspaceToolbarComponent} from '../../shared/organisms/workspace-toolbar.component';
 import {QueueActions} from '../../state/queue.actions';
@@ -35,10 +36,13 @@ import {
   selectOpenedRevision,
   selectOrganizations,
   selectPriorities,
+  selectProjectCreateError,
+  selectProjectCreating,
   selectProjects,
   selectProjectSavedTicketFilters,
   selectProjectTickets,
   selectProjectTypes,
+  selectProjectWizardOpen,
   selectSelectedProject,
   selectSelectedProjectId,
   selectSelectedTicket,
@@ -69,7 +73,7 @@ import {
 @Component({
   selector: 'qd-workspace-page',
   standalone: true,
-  imports: [SidebarComponent, TicketDialogComponent, ToastComponent, WorkspaceTabHostComponent, WorkspaceToolbarComponent],
+  imports: [ProjectWizardComponent, SidebarComponent, TicketDialogComponent, ToastComponent, WorkspaceTabHostComponent, WorkspaceToolbarComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading() && !data()) {
@@ -140,15 +144,18 @@ import {
             (olderRevisionsRequested)="loadOlderRevisions($event)"
             (revisionRestoreRequested)="store.dispatch(revisionRestoreRequested($event))"
             (commentSubmitted)="store.dispatch(commentCreateRequested($event))"
-            (projectCreated)="store.dispatch(projectCreateRequested({ request: $event }))"
+            (projectWizardOpened)="store.dispatch(projectWizardOpened())"
+            (projectUpdated)="store.dispatch(projectUpdateRequested($event))"
             (projectSelected)="dispatchProjectSelected($event)"
             (userCreated)="store.dispatch(userCreateRequested({ request: $event }))"
             (userUpdated)="store.dispatch(userUpdateRequested($event))"
             (ticketTypeCreated)="store.dispatch(ticketTypeCreateRequested({ request: $event }))"
+            (ticketTypeUpdated)="store.dispatch(ticketTypeUpdateRequested($event))"
             (ticketTypeDeleted)="store.dispatch(ticketTypeDeleteRequested({ typeId: $event }))"
             (statusAdded)="store.dispatch(workflowStatusAdded())"
             (statusPatched)="store.dispatch(workflowStatusPatched($event))"
             (statusRemoved)="store.dispatch(workflowStatusRemoved({ index: $event }))"
+            (statusMoved)="store.dispatch(workflowStatusMoved($event))"
             (transitionAdded)="store.dispatch(workflowTransitionAdded())"
             (transitionPatched)="store.dispatch(workflowTransitionPatched($event))"
             (transitionRemoved)="store.dispatch(workflowTransitionRemoved({ index: $event }))"
@@ -163,6 +170,14 @@ import {
             (savedFilterDeleted)="store.dispatch(savedTicketFilterDeleteRequested({ filterId: $event }))"
             (bulkUpdateRequested)="store.dispatch(ticketsBulkUpdateRequested({ request: $event }))" />
         </section>
+
+        <qd-project-wizard
+          [open]="projectWizardOpen()"
+          [creating]="projectCreating()"
+          [error]="projectCreateError()"
+          [projects]="projects()"
+          (closed)="store.dispatch(projectWizardClosed())"
+          (submitted)="store.dispatch(projectCreateRequested({request: $event}))" />
 
         <qd-ticket-dialog
           [open]="Boolean(ticketDialog())"
@@ -206,6 +221,9 @@ export class WorkspacePageComponent {
   protected readonly statuses = this.store.selectSignal(selectSortedStatuses);
   protected readonly projectTickets = this.store.selectSignal(selectProjectTickets);
   protected readonly projectTypes = this.store.selectSignal(selectProjectTypes);
+  protected readonly projectWizardOpen = this.store.selectSignal(selectProjectWizardOpen);
+  protected readonly projectCreating = this.store.selectSignal(selectProjectCreating);
+  protected readonly projectCreateError = this.store.selectSignal(selectProjectCreateError);
   protected readonly priorities = this.store.selectSignal(selectPriorities);
   protected readonly visibleTickets = this.store.selectSignal(selectVisibleTickets);
   protected readonly myTickets = this.store.selectSignal(selectMyTickets);
@@ -235,13 +253,18 @@ export class WorkspacePageComponent {
   protected readonly commentCreateRequested = QueueActions.commentCreateRequested;
   protected readonly ticketCommitmentRequested = QueueActions.ticketCommitmentRequested;
   protected readonly projectCreateRequested = QueueActions.projectCreateRequested;
+  protected readonly projectWizardOpened = QueueActions.projectWizardOpened;
+  protected readonly projectWizardClosed = QueueActions.projectWizardClosed;
+  protected readonly projectUpdateRequested = QueueActions.projectUpdateRequested;
   protected readonly userCreateRequested = QueueActions.userCreateRequested;
   protected readonly userUpdateRequested = QueueActions.userUpdateRequested;
   protected readonly ticketTypeCreateRequested = QueueActions.ticketTypeCreateRequested;
+  protected readonly ticketTypeUpdateRequested = QueueActions.ticketTypeUpdateRequested;
   protected readonly ticketTypeDeleteRequested = QueueActions.ticketTypeDeleteRequested;
   protected readonly workflowStatusAdded = QueueActions.workflowStatusAdded;
   protected readonly workflowStatusPatched = QueueActions.workflowStatusPatched;
   protected readonly workflowStatusRemoved = QueueActions.workflowStatusRemoved;
+  protected readonly workflowStatusMoved = QueueActions.workflowStatusMoved;
   protected readonly workflowTransitionAdded = QueueActions.workflowTransitionAdded;
   protected readonly workflowTransitionPatched = QueueActions.workflowTransitionPatched;
   protected readonly workflowTransitionRemoved = QueueActions.workflowTransitionRemoved;

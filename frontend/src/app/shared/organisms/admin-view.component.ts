@@ -3,7 +3,6 @@ import {ChangeDetectionStrategy, Component, input, output} from '@angular/core';
 import {
   ActivityHook,
   CreateActivityHookRequest,
-  CreateProjectRequest,
   CreateTicketTypeRequest,
   CreateUserRequest,
   Project,
@@ -11,6 +10,8 @@ import {
   Ticket,
   TicketType,
   UpdateActivityHookRequest,
+  UpdateProjectRequest,
+  UpdateTicketTypeRequest,
   Workflow
 } from '../../core/api.models';
 import {WorkflowStatusPatch, WorkflowTransitionPatch} from '../../state/queue.models';
@@ -37,8 +38,10 @@ import {AdminWorkflowPanelComponent} from './admin-workflow-panel.component';
     <div class="admin-grid">
       <qd-admin-projects-panel
         [projects]="projects()"
+        [selectedProject]="selectedProject()"
         [tickets]="tickets()"
-        (projectCreated)="projectCreated.emit($event)"
+        (projectWizardOpened)="projectWizardOpened.emit()"
+        (projectUpdated)="projectUpdated.emit($event)"
         (projectSelected)="projectSelected.emit($event)" />
       <qd-admin-users-panel
         [users]="users()"
@@ -48,12 +51,14 @@ import {AdminWorkflowPanelComponent} from './admin-workflow-panel.component';
         [selectedProject]="selectedProject()"
         [projectTypes]="projectTypes()"
         (ticketTypeCreated)="ticketTypeCreated.emit($event)"
+        (ticketTypeUpdated)="ticketTypeUpdated.emit($event)"
         (ticketTypeDeleted)="ticketTypeDeleted.emit($event)" />
       <qd-admin-workflow-panel
         [workflowDraft]="workflowDraft()"
         (statusAdded)="statusAdded.emit()"
         (statusPatched)="statusPatched.emit($event)"
         (statusRemoved)="statusRemoved.emit($event)"
+        (statusMoved)="statusMoved.emit($event)"
         (transitionAdded)="transitionAdded.emit()"
         (transitionPatched)="transitionPatched.emit($event)"
         (transitionRemoved)="transitionRemoved.emit($event)"
@@ -79,15 +84,18 @@ export class AdminViewComponent {
   readonly projectTypes = input<TicketType[]>([]);
   readonly workflowDraft = input<Workflow | null>(null);
 
-  readonly projectCreated = output<CreateProjectRequest>();
+  readonly projectWizardOpened = output<void>();
+  readonly projectUpdated = output<{projectId: string; request: UpdateProjectRequest}>();
   readonly projectSelected = output<string>();
   readonly userCreated = output<CreateUserRequest>();
   readonly userToggled = output<{ userId: string; active: boolean }>();
   readonly ticketTypeCreated = output<CreateTicketTypeRequest>();
+  readonly ticketTypeUpdated = output<{typeId: string; request: UpdateTicketTypeRequest}>();
   readonly ticketTypeDeleted = output<string>();
   readonly statusAdded = output<void>();
   readonly statusPatched = output<WorkflowStatusPatch>();
   readonly statusRemoved = output<number>();
+  readonly statusMoved = output<{index: number; direction: -1 | 1}>();
   readonly transitionAdded = output<void>();
   readonly transitionPatched = output<WorkflowTransitionPatch>();
   readonly transitionRemoved = output<number>();

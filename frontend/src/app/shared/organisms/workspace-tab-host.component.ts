@@ -4,7 +4,6 @@ import {
   BootstrapResponse,
   BulkUpdateTicketsRequest,
   CreateActivityHookRequest,
-  CreateProjectRequest,
   CreateTicketCommentRequest,
   CreateTicketTypeRequest,
   CreateUserRequest,
@@ -21,6 +20,8 @@ import {
   TicketRevisionSummary,
   TicketType,
   UpdateActivityHookRequest,
+  UpdateProjectRequest,
+  UpdateTicketTypeRequest,
   UpdateUserRequest,
   Workflow,
   WorkflowStatus
@@ -144,15 +145,18 @@ import {TicketListViewComponent} from './ticket-list-view.component';
               [users]="users()"
               [projectTypes]="projectTypes()"
               [workflowDraft]="workflowDraft()"
-              (projectCreated)="projectCreated.emit($event)"
+              (projectWizardOpened)="projectWizardOpened.emit()"
+              (projectUpdated)="projectUpdated.emit($event)"
               (projectSelected)="projectSelected.emit($event)"
               (userCreated)="userCreated.emit($event)"
               (userToggled)="userUpdated.emit({ userId: $event.userId, request: { active: $event.active } })"
               (ticketTypeCreated)="ticketTypeCreated.emit($event)"
+              (ticketTypeUpdated)="ticketTypeUpdated.emit($event)"
               (ticketTypeDeleted)="ticketTypeDeleted.emit($event)"
               (statusAdded)="statusAdded.emit()"
               (statusPatched)="statusPatched.emit($event)"
               (statusRemoved)="statusRemoved.emit($event)"
+              (statusMoved)="statusMoved.emit($event)"
               (transitionAdded)="transitionAdded.emit()"
               (transitionPatched)="transitionPatched.emit($event)"
               (transitionRemoved)="transitionRemoved.emit($event)"
@@ -209,15 +213,18 @@ export class WorkspaceTabHostComponent {
   readonly revisionClosed = output<void>();
   readonly olderRevisionsRequested = output<number>();
   readonly revisionRestoreRequested = output<{ticketId: string; version: number; expectedVersion: number}>();
-  readonly projectCreated = output<CreateProjectRequest>();
+  readonly projectWizardOpened = output<void>();
+  readonly projectUpdated = output<{projectId: string; request: UpdateProjectRequest}>();
   readonly projectSelected = output<string>();
   readonly userCreated = output<CreateUserRequest>();
   readonly userUpdated = output<{ userId: string; request: UpdateUserRequest }>();
   readonly ticketTypeCreated = output<CreateTicketTypeRequest>();
+  readonly ticketTypeUpdated = output<{typeId: string; request: UpdateTicketTypeRequest}>();
   readonly ticketTypeDeleted = output<string>();
   readonly statusAdded = output<void>();
   readonly statusPatched = output<WorkflowStatusPatch>();
   readonly statusRemoved = output<number>();
+  readonly statusMoved = output<{index: number; direction: -1 | 1}>();
   readonly transitionAdded = output<void>();
   readonly transitionPatched = output<WorkflowTransitionPatch>();
   readonly transitionRemoved = output<number>();

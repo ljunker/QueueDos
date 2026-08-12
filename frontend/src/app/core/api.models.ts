@@ -27,6 +27,7 @@ export interface Project {
   key: string;
   name: string;
   description: string;
+  color: string;
   nextTicketNumber: number;
   archived: boolean;
 }
@@ -236,6 +237,20 @@ export interface CreateProjectRequest {
   key: string;
   name: string;
   description?: string;
+  color?: string;
+  ticketTypes?: CreateProjectTicketTypeRequest[];
+  statuses?: CreateProjectStatusRequest[];
+}
+
+export interface CreateProjectTicketTypeRequest {
+  name: string;
+  description?: string;
+  color?: string;
+}
+
+export interface CreateProjectStatusRequest {
+  name: string;
+  category: 'TODO' | 'IN_PROGRESS' | 'DONE';
 }
 
 export interface UpdateProjectRequest {
@@ -243,6 +258,7 @@ export interface UpdateProjectRequest {
   name?: string;
   description?: string;
   archived?: boolean;
+  color?: string;
 }
 
 export interface CreateUserRequest {

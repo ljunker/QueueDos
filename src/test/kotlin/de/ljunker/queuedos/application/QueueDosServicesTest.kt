@@ -69,6 +69,74 @@ class QueueDosServicesTest {
     }
 
     @Test
+    fun projectWizardConfigurationIsCreatedAtomically() {
+        val services = newServices()
+        val admin = admin(services)
+
+        val project = services.projects.create(
+            admin,
+            CreateProjectCommand(
+                key = "OPS",
+                name = "Operations",
+                description = "Production work",
+                color = "#0f766e",
+                ticketTypes = listOf(
+                    CreateProjectTicketTypeCommand("Incident", "Production incident", "#dc2626"),
+                    CreateProjectTicketTypeCommand("Change", "Planned change", "#2563eb")
+                ),
+                statuses = listOf(
+                    CreateProjectStatusCommand("Incoming", "TODO"),
+                    CreateProjectStatusCommand("Investigating", "IN_PROGRESS"),
+                    CreateProjectStatusCommand("Resolved", "DONE")
+                )
+            )
+        )
+
+        val bootstrap = services.queries.bootstrap(admin)
+        val types = bootstrap.ticketTypes.filter { it.projectId == project.id }
+        val workflow = bootstrap.workflows.single { it.projectId == project.id }
+        assertEquals("#0f766e", project.color)
+        assertEquals(listOf("Change", "Incident"), types.map { it.name }.sorted())
+        assertEquals(listOf("Incoming", "Investigating", "Resolved"), workflow.statuses.map { it.name })
+        assertEquals(listOf("TODO", "IN_PROGRESS", "DONE"), workflow.statuses.map { it.category })
+        assertEquals(6, workflow.transitions.size)
+        assertTrue(workflow.transitions.all { it.allowedRoles == listOf(Role.ADMIN, Role.MEMBER) })
+    }
+
+    @Test
+    fun invalidWizardConfigurationRollsBackTheWholeProject() {
+        val services = newServices()
+        val admin = admin(services)
+
+        val failures = listOf(
+            CreateProjectCommand("E01", "Empty types", "", ticketTypes = emptyList(), statuses = validStatuses()),
+            CreateProjectCommand("E02", "One status", "", ticketTypes = validTypes(), statuses = listOf(CreateProjectStatusCommand("Open", "TODO"))),
+            CreateProjectCommand("E03", "Duplicate types", "", ticketTypes = listOf(
+                CreateProjectTicketTypeCommand("Task", "", "#2563eb"),
+                CreateProjectTicketTypeCommand("task", "", "#dc2626")
+            ), statuses = validStatuses()),
+            CreateProjectCommand("E04", "Duplicate statuses", "", ticketTypes = validTypes(), statuses = listOf(
+                CreateProjectStatusCommand("Open", "TODO"),
+                CreateProjectStatusCommand("open", "DONE")
+            )),
+            CreateProjectCommand("E05", "Bad category", "", ticketTypes = validTypes(), statuses = listOf(
+                CreateProjectStatusCommand("Open", "UNKNOWN"),
+                CreateProjectStatusCommand("Done", "DONE")
+            )),
+            CreateProjectCommand("E06", "Bad color", "", color = "blue", ticketTypes = validTypes(), statuses = validStatuses())
+        )
+
+        failures.forEach { command ->
+            assertEquals(FailureKind.BAD_REQUEST, assertFailsWith<QueueDosFailure> {
+                services.projects.create(admin, command)
+            }.kind)
+        }
+
+        val keys = services.queries.bootstrap(admin).projects.map { it.key }
+        assertTrue(failures.none { it.key in keys })
+    }
+
+    @Test
     fun workflowTransitionsAreEnforced() {
         val services = newServices()
         val admin = admin(services)
@@ -449,6 +517,13 @@ class QueueDosServicesTest {
 
     private fun admin(services: QueueDosServices) =
         services.auth.login(LoginCommand("admin@queuedos.local", "admin")).user
+
+    private fun validTypes() = listOf(CreateProjectTicketTypeCommand("Task", "", "#2563eb"))
+
+    private fun validStatuses() = listOf(
+        CreateProjectStatusCommand("Open", "TODO"),
+        CreateProjectStatusCommand("Done", "DONE")
+    )
 
     private class RecordingSlackSender : SlackMessageSender {
         val messages = mutableListOf<Pair<String, String>>()

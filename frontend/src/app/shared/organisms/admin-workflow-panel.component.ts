@@ -19,7 +19,8 @@ import { WorkflowTransitionEditorComponent } from '../molecules/workflow-transit
             [workflow]="workflow"
             (statusAdded)="statusAdded.emit()"
             (statusPatched)="statusPatched.emit($event)"
-            (statusRemoved)="statusRemoved.emit($event)" />
+            (statusRemoved)="statusRemoved.emit($event)"
+            (statusMoved)="statusMoved.emit($event)" />
           <qd-workflow-transition-editor
             [workflow]="workflow"
             (transitionAdded)="transitionAdded.emit()"
@@ -41,6 +42,7 @@ export class AdminWorkflowPanelComponent {
   readonly statusAdded = output<void>();
   readonly statusPatched = output<WorkflowStatusPatch>();
   readonly statusRemoved = output<number>();
+  readonly statusMoved = output<{index: number; direction: -1 | 1}>();
   readonly transitionAdded = output<void>();
   readonly transitionPatched = output<WorkflowTransitionPatch>();
   readonly transitionRemoved = output<number>();

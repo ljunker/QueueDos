@@ -12,6 +12,7 @@ import java.util.*
 
 private val projectKeyPattern = Regex("^[A-Z][A-Z0-9]{1,9}$")
 private val hexColorPattern = Regex("^#[0-9a-fA-F]{6}$")
+private val workflowCategories = setOf("TODO", "IN_PROGRESS", "DONE")
 
 internal fun normalizeEmail(value: String): String {
     val email = value.trim().lowercase(Locale.ROOT)
@@ -106,10 +107,14 @@ internal fun normalizeStatuses(
         throw BadRequestFailure("Workflow needs at least one status.")
     }
     val normalized = statuses.mapIndexed { index, status ->
+        val category = status.category.ifBlank { "TODO" }
+        if (category !in workflowCategories) {
+            throw BadRequestFailure("Workflow category must be TODO, IN_PROGRESS, or DONE.")
+        }
         status.copy(
             id = status.id.ifBlank { nextId("status") },
             name = requireName(status.name, "Status name"),
-            category = status.category.ifBlank { "TODO" },
+            category = category,
             sortOrder = index
         )
     }

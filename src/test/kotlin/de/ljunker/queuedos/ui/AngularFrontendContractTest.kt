@@ -85,6 +85,27 @@ class AngularFrontendContractTest {
     }
 
     @Test
+    fun projectWizardAndProjectSpecificConfigurationArePresent() {
+        val wizard = projectFile("frontend/src/app/shared/organisms/project-wizard.component.ts")
+        val projects = projectFile("frontend/src/app/shared/organisms/admin-projects-panel.component.ts")
+        val ticketTypes = projectFile("frontend/src/app/shared/organisms/admin-ticket-types-panel.component.ts")
+        val statusEditor = projectFile("frontend/src/app/shared/molecules/workflow-status-editor.component.ts")
+        val effects = projectFile("frontend/src/app/state/queue.effects.ts")
+
+        assertContains(wizard, "New project")
+        assertContains(wizard, "Ticket types")
+        assertContains(wizard, "Board columns")
+        assertContains(wizard, "Create project")
+        assertContains(wizard, "ticketTypes: this.ticketTypes()")
+        assertContains(wizard, "statuses: this.statuses()")
+        assertContains(projects, "project.color")
+        assertContains(projects, "projectUpdated")
+        assertContains(ticketTypes, "ticketTypeUpdated")
+        assertContains(statusEditor, "statusMoved")
+        assertContains(effects, "projectCreateFailed")
+    }
+
+    @Test
     fun ktorServesAngularSpaAssets() {
         val routes = projectFile("src/main/kotlin/de/ljunker/queuedos/api/ApiRoutes.kt")
 

@@ -23,7 +23,11 @@ import { sortedStatuses } from '../../state/queue.selectors';
               <option value="IN_PROGRESS">In progress</option>
               <option value="DONE">Done</option>
             </select>
-            <button type="button" (click)="statusRemoved.emit(index)">Remove</button>
+            <div class="row-actions">
+              <button type="button" class="icon-button" aria-label="Move status up" [disabled]="index === 0" (click)="statusMoved.emit({index, direction: -1})">↑</button>
+              <button type="button" class="icon-button" aria-label="Move status down" [disabled]="index === workflow().statuses.length - 1" (click)="statusMoved.emit({index, direction: 1})">↓</button>
+              <button type="button" (click)="statusRemoved.emit(index)">Remove</button>
+            </div>
           </div>
         }
       </div>
@@ -36,6 +40,7 @@ export class WorkflowStatusEditorComponent {
   readonly statusAdded = output<void>();
   readonly statusPatched = output<WorkflowStatusPatch>();
   readonly statusRemoved = output<number>();
+  readonly statusMoved = output<{index: number; direction: -1 | 1}>();
 
   protected readonly sortedStatuses = sortedStatuses;
 

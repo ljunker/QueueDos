@@ -85,9 +85,17 @@ Der Docker-Build baut das Angular-Frontend in einer eigenen Node-Stage und kopie
 
 Bauen mit 
 ```bash
+docker buildx create --name queuedos-builder --driver docker-container --use
+```
+```bash
+docker buildx use queuedos-builder
+docker buildx inspect --bootstrap 
+docker buildx ls
+```
+```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   -t kryptikker/queuedos:latest \
-  -t kryptikker/queuedos:74f7163 \
+  -t kryptikker/queuedos:755e2098 \
   --push .
 ```

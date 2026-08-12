@@ -210,11 +210,16 @@ class ProjectService(
                 organizationId = actor.organizationId,
                 key = key,
                 name = requireName(command.name, "Project name"),
-                description = command.description.trim()
+                description = command.description.trim(),
+                color = normalizeColor(command.color)
             )
+            val ticketTypes = command.ticketTypes?.let { configuredTicketTypes(actor, project, it) }
+                ?: defaultTicketTypes(actor.organizationId, project.id)
+            val workflow = command.statuses?.let { configuredWorkflow(actor, project, it) }
+                ?: defaultWorkflow(actor.organizationId, project.id)
             repositories.projects.insert(project)
-            defaultTicketTypes(actor.organizationId, project.id).forEach(repositories.ticketTypes::insert)
-            repositories.workflows.insert(defaultWorkflow(actor.organizationId, project.id))
+            ticketTypes.forEach(repositories.ticketTypes::insert)
+            repositories.workflows.insert(workflow)
             project
         }
 
@@ -235,9 +240,57 @@ class ProjectService(
                 key = nextKey,
                 name = command.name?.let { requireName(it, "Project name") } ?: project.name,
                 description = command.description?.trim() ?: project.description,
+                color = command.color?.let(::normalizeColor) ?: project.color,
                 archived = command.archived ?: project.archived
             ).also(repositories.projects::update)
         }
+
+    private fun configuredTicketTypes(
+        actor: User,
+        project: Project,
+        commands: List<CreateProjectTicketTypeCommand>
+    ): List<TicketType> {
+        if (commands.isEmpty()) throw BadRequestFailure("Project needs at least one ticket type.")
+        val ticketTypes = commands.map { command ->
+            TicketType(
+                id = id("type"),
+                organizationId = actor.organizationId,
+                projectId = project.id,
+                name = requireName(command.name, "Ticket type name"),
+                description = command.description.trim(),
+                color = normalizeColor(command.color)
+            )
+        }
+        if (ticketTypes.map { it.name.lowercase(Locale.ROOT) }.distinct().size != ticketTypes.size) {
+            throw BadRequestFailure("Ticket type names must be unique.")
+        }
+        return ticketTypes
+    }
+
+    private fun configuredWorkflow(
+        actor: User,
+        project: Project,
+        commands: List<CreateProjectStatusCommand>
+    ): Workflow {
+        if (commands.size < 2) throw BadRequestFailure("Project workflow needs at least two statuses.")
+        val statuses = normalizeStatuses(
+            commands.mapIndexed { index, command ->
+                WorkflowStatus("", command.name, command.category, index)
+            },
+            ::id
+        )
+        val transitions = statuses.flatMap { from ->
+            statuses.filter { it.id != from.id }.map { to ->
+                WorkflowTransition(
+                    id = id("transition"),
+                    fromStatusId = from.id,
+                    toStatusId = to.id,
+                    allowedRoles = listOf(Role.ADMIN, Role.MEMBER)
+                )
+            }
+        }
+        return Workflow(id("workflow"), actor.organizationId, project.id, statuses, transitions)
+    }
 
     private fun requireProject(actor: User, projectId: String): Project =
         repositories.projects.findById(actor.organizationId, projectId)

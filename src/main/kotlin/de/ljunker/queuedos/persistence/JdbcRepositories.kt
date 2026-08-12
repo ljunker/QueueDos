@@ -147,7 +147,7 @@ private class JdbcProjectRepository(
     override fun listByOrganization(organizationId: String): List<Project> =
         connection().query(
             """
-            SELECT id, organization_id, key, name, description, next_ticket_number, archived
+            SELECT id, organization_id, key, name, description, color, next_ticket_number, archived
             FROM queuedos_projects
             WHERE organization_id = ?
             ORDER BY key
@@ -175,14 +175,15 @@ private class JdbcProjectRepository(
         connection().execute(
             """
             INSERT INTO queuedos_projects
-                (id, organization_id, key, name, description, next_ticket_number, archived)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                (id, organization_id, key, name, description, color, next_ticket_number, archived)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
             project.id,
             project.organizationId,
             project.key,
             project.name,
             project.description,
+            project.color,
             project.nextTicketNumber,
             project.archived
         )
@@ -192,12 +193,13 @@ private class JdbcProjectRepository(
         connection().execute(
             """
             UPDATE queuedos_projects
-            SET key = ?, name = ?, description = ?, next_ticket_number = ?, archived = ?
+            SET key = ?, name = ?, description = ?, color = ?, next_ticket_number = ?, archived = ?
             WHERE id = ? AND organization_id = ?
             """.trimIndent(),
             project.key,
             project.name,
             project.description,
+            project.color,
             project.nextTicketNumber,
             project.archived,
             project.id,
@@ -208,7 +210,7 @@ private class JdbcProjectRepository(
     private fun findById(organizationId: String, projectId: String, forUpdate: Boolean): Project? =
         connection().queryOne(
             """
-            SELECT id, organization_id, key, name, description, next_ticket_number, archived
+            SELECT id, organization_id, key, name, description, color, next_ticket_number, archived
             FROM queuedos_projects
             WHERE organization_id = ? AND id = ?
             ${if (forUpdate) "FOR UPDATE" else ""}
@@ -1111,6 +1113,7 @@ private fun project(result: ResultSet): Project =
         key = result.getString("key"),
         name = result.getString("name"),
         description = result.getString("description"),
+        color = result.getString("color"),
         nextTicketNumber = result.getInt("next_ticket_number"),
         archived = result.getBoolean("archived")
     )

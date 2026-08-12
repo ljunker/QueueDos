@@ -5,9 +5,17 @@ import de.ljunker.queuedos.domain.*
 
 internal fun LoginRequest.toCommand() = LoginCommand(email, password)
 
-internal fun CreateProjectRequest.toCommand() = CreateProjectCommand(key, name, description)
+internal fun CreateProjectRequest.toCommand() =
+    CreateProjectCommand(
+        key,
+        name,
+        description,
+        color,
+        ticketTypes?.map { CreateProjectTicketTypeCommand(it.name, it.description, it.color) },
+        statuses?.map { CreateProjectStatusCommand(it.name, it.category) }
+    )
 
-internal fun UpdateProjectRequest.toCommand() = UpdateProjectCommand(key, name, description, archived)
+internal fun UpdateProjectRequest.toCommand() = UpdateProjectCommand(key, name, description, archived, color)
 
 internal fun CreateUserRequest.toCommand() = CreateUserCommand(email, displayName, role, password)
 
@@ -119,7 +127,7 @@ internal fun Organization.toResponse() = OrganizationResponse(id, name)
 internal fun User.toResponse() = UserResponse(id, organizationId, email, displayName, role, active)
 
 internal fun Project.toResponse() =
-    ProjectResponse(id, organizationId, key, name, description, nextTicketNumber, archived)
+    ProjectResponse(id, organizationId, key, name, description, color, nextTicketNumber, archived)
 
 internal fun TicketType.toResponse() =
     TicketTypeResponse(id, organizationId, projectId, name, description, color)

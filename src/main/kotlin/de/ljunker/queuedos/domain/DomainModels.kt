@@ -42,6 +42,7 @@ data class Project(
     val key: String,
     val name: String,
     val description: String = "",
+    val color: String = "#2563eb",
     val nextTicketNumber: Int = 1,
     val archived: Boolean = false
 )

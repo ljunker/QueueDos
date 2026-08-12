@@ -31,6 +31,9 @@ export const selectTicketDetail = createSelector(selectQueueState, (state) => st
 export const selectOpenedRevision = createSelector(selectQueueState, (state) => state.openedRevision);
 export const selectTicketVersionConflict = createSelector(selectQueueState, (state) => state.ticketVersionConflict);
 export const selectTicketDialog = createSelector(selectQueueState, (state) => state.ticketDialog);
+export const selectProjectWizardOpen = createSelector(selectQueueState, (state) => state.projectWizardOpen);
+export const selectProjectCreating = createSelector(selectQueueState, (state) => state.projectCreating);
+export const selectProjectCreateError = createSelector(selectQueueState, (state) => state.projectCreateError);
 export const selectWorkflowDraft = createSelector(selectQueueState, (state) => state.workflowDraft);
 export const selectToast = createSelector(selectQueueState, (state) => state.toast);
 

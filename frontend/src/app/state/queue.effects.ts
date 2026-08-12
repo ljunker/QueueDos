@@ -269,7 +269,7 @@ export class QueueEffects {
       concatMap(({ request }) =>
         this.api.createProject(request).pipe(
           map((project) => QueueActions.projectCreated({ project })),
-          catchError((error: unknown) => of(QueueActions.mutationFailed({ error: errorMessage(error, 'Project could not be created.') })))
+          catchError((error: unknown) => of(QueueActions.projectCreateFailed({ error: errorMessage(error, 'Project could not be created.') })))
         )
       )
     )
@@ -285,7 +285,19 @@ export class QueueEffects {
   readonly reloadAfterProjectCreated$ = createEffect(() =>
     this.actions$.pipe(
       ofType(QueueActions.projectCreated),
-      map(() => QueueActions.mutationSucceeded({}))
+      map(() => QueueActions.mutationSucceeded({message: 'Project created.'}))
+    )
+  );
+
+  readonly updateProject$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.projectUpdateRequested),
+      concatMap(({projectId, request}) =>
+        this.api.updateProject(projectId, request).pipe(
+          map(() => QueueActions.mutationSucceeded({message: 'Project updated.'})),
+          catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Project could not be updated.')})))
+        )
+      )
     )
   );
 
@@ -332,6 +344,18 @@ export class QueueEffects {
         this.api.deleteTicketType(typeId).pipe(
           map(() => QueueActions.mutationSucceeded({})),
           catchError((error: unknown) => of(QueueActions.mutationFailed({ error: errorMessage(error, 'Ticket type could not be deleted.') })))
+        )
+      )
+    )
+  );
+
+  readonly updateTicketType$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.ticketTypeUpdateRequested),
+      concatMap(({typeId, request}) =>
+        this.api.updateTicketType(typeId, request).pipe(
+          map(() => QueueActions.mutationSucceeded({message: 'Ticket type updated.'})),
+          catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Ticket type could not be updated.')})))
         )
       )
     )

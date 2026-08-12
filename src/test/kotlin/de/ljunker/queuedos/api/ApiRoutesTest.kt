@@ -238,6 +238,69 @@ class ApiRoutesTest {
         )
     }
 
+    @Test
+    fun projectWizardApiCreatesAndUpdatesProjectSpecificConfiguration() = testApplication {
+        application { module(newStore()) }
+        val client = createClient { install(ClientContentNegotiation) { json(json) } }
+        val adminToken = login(client, "admin@queuedos.local", "admin")
+
+        val project = client.post("/api/projects") {
+            auth(adminToken)
+            jsonBody(
+                CreateProjectRequest(
+                    key = "WEB",
+                    name = "Website",
+                    color = "#7c3aed",
+                    ticketTypes = listOf(
+                        CreateProjectTicketTypeRequest("Feature", "User-facing change", "#16a34a"),
+                        CreateProjectTicketTypeRequest("Defect", "Broken behavior", "#dc2626")
+                    ),
+                    statuses = listOf(
+                        CreateProjectStatusRequest("Ideas", "TODO"),
+                        CreateProjectStatusRequest("Building", "IN_PROGRESS"),
+                        CreateProjectStatusRequest("Shipped", "DONE")
+                    )
+                )
+            )
+        }.body<ProjectResponse>()
+        assertEquals("#7c3aed", project.color)
+
+        var bootstrap = client.get("/api/bootstrap") { auth(adminToken) }.body<BootstrapResponse>()
+        val types = bootstrap.ticketTypes.filter { it.projectId == project.id }
+        val workflow = bootstrap.workflows.single { it.projectId == project.id }
+        assertEquals(listOf("Defect", "Feature"), types.map { it.name }.sorted())
+        assertEquals(listOf("Ideas", "Building", "Shipped"), workflow.statuses.map { it.name })
+        assertEquals(6, workflow.transitions.size)
+
+        val updatedProject = client.put("/api/projects/${project.id}") {
+            auth(adminToken)
+            jsonBody(UpdateProjectRequest(name = "Web platform", color = "#0891b2"))
+        }.body<ProjectResponse>()
+        assertEquals("#0891b2", updatedProject.color)
+
+        val updatedType = client.put("/api/ticket-types/${types.first().id}") {
+            auth(adminToken)
+            jsonBody(UpdateTicketTypeRequest(name = "Bug", description = "A regression", color = "#b91c1c"))
+        }.body<TicketTypeResponse>()
+        assertEquals("Bug", updatedType.name)
+
+        val invalid = client.post("/api/projects") {
+            auth(adminToken)
+            jsonBody(CreateProjectRequest("BAD", "Incomplete", ticketTypes = emptyList(), statuses = emptyList()))
+        }
+        assertEquals(HttpStatusCode.BadRequest, invalid.status)
+        val legacyProject = client.post("/api/projects") {
+            auth(adminToken)
+            contentType(ContentType.Application.Json)
+            setBody("""{"key":"LEG","name":"Legacy client"}""")
+        }.body<ProjectResponse>()
+        bootstrap = client.get("/api/bootstrap") { auth(adminToken) }.body()
+        assertTrue(bootstrap.projects.none { it.key == "BAD" })
+        assertEquals("#2563eb", legacyProject.color)
+        assertEquals(4, bootstrap.ticketTypes.count { it.projectId == legacyProject.id })
+        assertEquals(5, bootstrap.workflows.single { it.projectId == legacyProject.id }.statuses.size)
+    }
+
     private suspend fun login(client: HttpClient, email: String, password: String): String =
         client.post("/api/auth/login") {
             jsonBody(LoginRequest(email, password))

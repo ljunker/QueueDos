@@ -29,13 +29,32 @@ data class TicketRevisionPage(
 
 data class LoginCommand(val email: String, val password: String)
 
-data class CreateProjectCommand(val key: String, val name: String, val description: String)
+data class CreateProjectTicketTypeCommand(
+    val name: String,
+    val description: String,
+    val color: String
+)
+
+data class CreateProjectStatusCommand(
+    val name: String,
+    val category: String
+)
+
+data class CreateProjectCommand(
+    val key: String,
+    val name: String,
+    val description: String,
+    val color: String = "#2563eb",
+    val ticketTypes: List<CreateProjectTicketTypeCommand>? = null,
+    val statuses: List<CreateProjectStatusCommand>? = null
+)
 
 data class UpdateProjectCommand(
     val key: String?,
     val name: String?,
     val description: String?,
-    val archived: Boolean?
+    val archived: Boolean?,
+    val color: String? = null
 )
 
 data class CreateUserCommand(

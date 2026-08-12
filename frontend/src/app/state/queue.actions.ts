@@ -20,7 +20,9 @@ import {
   TicketRevisionDetail,
   TicketRevisionSummary,
   UpdateActivityHookRequest,
+  UpdateProjectRequest,
   UpdateSavedTicketFilterRequest,
+  UpdateTicketTypeRequest,
   UpdateUserRequest
 } from '../core/api.models';
 import {
@@ -87,9 +89,14 @@ export const QueueActions = createActionGroup({
 
     'Project Create Requested': props<{ request: CreateProjectRequest }>(),
     'Project Created': props<{ project: Project }>(),
+    'Project Create Failed': props<{ error: string }>(),
+    'Project Wizard Opened': emptyProps(),
+    'Project Wizard Closed': emptyProps(),
+    'Project Update Requested': props<{ projectId: string; request: UpdateProjectRequest }>(),
     'User Create Requested': props<{ request: CreateUserRequest }>(),
     'User Update Requested': props<{ userId: string; request: UpdateUserRequest }>(),
     'Ticket Type Create Requested': props<{ request: CreateTicketTypeRequest }>(),
+    'Ticket Type Update Requested': props<{ typeId: string; request: UpdateTicketTypeRequest }>(),
     'Ticket Type Delete Requested': props<{ typeId: string }>(),
     'Workflow Save Requested': props<{ projectId: string; request: SaveWorkflowRequest }>(),
     'Saved Ticket Filter Create Requested': props<{ request: CreateSavedTicketFilterRequest }>(),
@@ -106,6 +113,7 @@ export const QueueActions = createActionGroup({
     'Workflow Status Added': emptyProps(),
     'Workflow Status Patched': props<WorkflowStatusPatch>(),
     'Workflow Status Removed': props<{ index: number }>(),
+    'Workflow Status Moved': props<{ index: number; direction: -1 | 1 }>(),
     'Workflow Transition Added': emptyProps(),
     'Workflow Transition Patched': props<WorkflowTransitionPatch>(),
     'Workflow Transition Removed': props<{ index: number }>(),

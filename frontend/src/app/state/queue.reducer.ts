@@ -35,6 +35,9 @@ export interface QueueState {
   filters: TicketFilters;
   myTicketsFilters: MyTicketsFilters;
   ticketDialog: TicketDialogState | null;
+  projectWizardOpen: boolean;
+  projectCreating: boolean;
+  projectCreateError: string;
   workflowDraft: Workflow | null;
   toast: string;
 }
@@ -57,6 +60,9 @@ export const initialState: QueueState = {
   filters: defaultFilters(),
   myTicketsFilters: defaultMyTicketsFilters(),
   ticketDialog: null,
+  projectWizardOpen: false,
+  projectCreating: false,
+  projectCreateError: '',
   workflowDraft: null,
   toast: ''
 };
@@ -240,6 +246,34 @@ export const queueReducer = createReducer(
     ticketDialog: null,
     ticketVersionConflict: null
   })),
+  on(QueueActions.projectWizardOpened, (state) => ({
+    ...state,
+    projectWizardOpen: true,
+    projectCreating: false,
+    projectCreateError: ''
+  })),
+  on(QueueActions.projectWizardClosed, (state) => ({
+    ...state,
+    projectWizardOpen: false,
+    projectCreating: false,
+    projectCreateError: ''
+  })),
+  on(QueueActions.projectCreateRequested, (state) => ({
+    ...state,
+    projectCreating: true,
+    projectCreateError: ''
+  })),
+  on(QueueActions.projectCreated, (state) => ({
+    ...state,
+    projectWizardOpen: false,
+    projectCreating: false,
+    projectCreateError: ''
+  })),
+  on(QueueActions.projectCreateFailed, (state, {error}) => ({
+    ...state,
+    projectCreating: false,
+    projectCreateError: error
+  })),
   on(QueueActions.ticketUpdateVersionConflict, (state, conflict) => ({
     ...state,
     ticketVersionConflict: conflict,
@@ -315,6 +349,20 @@ export const queueReducer = createReducer(
         transitions: state.workflowDraft.transitions.filter((transition) => {
           return transition.fromStatusId !== removed?.id && transition.toStatusId !== removed?.id;
         })
+      }
+    };
+  }),
+  on(QueueActions.workflowStatusMoved, (state, {index, direction}) => {
+    if (!state.workflowDraft) return state;
+    const target = index + direction;
+    if (target < 0 || target >= state.workflowDraft.statuses.length) return state;
+    const statuses = [...state.workflowDraft.statuses];
+    [statuses[index], statuses[target]] = [statuses[target], statuses[index]];
+    return {
+      ...state,
+      workflowDraft: {
+        ...state.workflowDraft,
+        statuses: statuses.map((status, sortOrder) => ({...status, sortOrder}))
       }
     };
   }),

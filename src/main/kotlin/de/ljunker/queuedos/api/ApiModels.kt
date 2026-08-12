@@ -108,6 +108,7 @@ data class ProjectResponse(
     val key: String,
     val name: String,
     val description: String = "",
+    val color: String = "#2563eb",
     val nextTicketNumber: Int = 1,
     val archived: Boolean = false
 )
@@ -231,10 +232,26 @@ data class ActivityHookResponse(
 )
 
 @Serializable
+data class CreateProjectTicketTypeRequest(
+    val name: String,
+    val description: String = "",
+    val color: String = "#2563eb"
+)
+
+@Serializable
+data class CreateProjectStatusRequest(
+    val name: String,
+    val category: String
+)
+
+@Serializable
 data class CreateProjectRequest(
     val key: String,
     val name: String,
-    val description: String = ""
+    val description: String = "",
+    val color: String = "#2563eb",
+    val ticketTypes: List<CreateProjectTicketTypeRequest>? = null,
+    val statuses: List<CreateProjectStatusRequest>? = null
 )
 
 @Serializable
@@ -242,7 +259,8 @@ data class UpdateProjectRequest(
     val key: String? = null,
     val name: String? = null,
     val description: String? = null,
-    val archived: Boolean? = null
+    val archived: Boolean? = null,
+    val color: String? = null
 )
 
 @Serializable

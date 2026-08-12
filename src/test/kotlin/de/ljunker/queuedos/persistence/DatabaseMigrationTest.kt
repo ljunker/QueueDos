@@ -19,6 +19,7 @@ class DatabaseMigrationTest {
         val admin = backend.services.auth.login(LoginCommand("admin@queuedos.local", "admin")).user
 
         assertEquals("user-admin", admin.id)
+        assertEquals("#2563eb", backend.services.queries.bootstrap(admin).projects.single().color)
         dataSource.connection.use { connection ->
             connection.createStatement().use { statement ->
                 statement.executeQuery("SELECT count(*) FROM flyway_schema_history").use {
@@ -53,6 +54,7 @@ class DatabaseMigrationTest {
         val bootstrap = backend.services.queries.bootstrap(admin)
 
         assertEquals("QueueDos", bootstrap.projects.single().name)
+        assertEquals("#2563eb", bootstrap.projects.single().color)
         assertEquals(listOf("QDOS-1", "QDOS-2", "QDOS-3"), bootstrap.tickets.map { it.key })
         dataSource.connection.use { connection ->
             connection.createStatement().executeQuery(

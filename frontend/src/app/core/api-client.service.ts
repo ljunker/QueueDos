@@ -24,7 +24,9 @@ import {
   TicketType,
   TransitionTicketRequest,
   UpdateActivityHookRequest,
+  UpdateProjectRequest,
   UpdateSavedTicketFilterRequest,
+  UpdateTicketTypeRequest,
   UpdateTicketRequest,
   UpdateUserRequest
 } from './api.models';
@@ -98,6 +100,10 @@ export class ApiClientService {
     return this.http.post<Project>('/api/projects', request);
   }
 
+  updateProject(id: string, request: UpdateProjectRequest) {
+    return this.http.put<Project>(`/api/projects/${id}`, request);
+  }
+
   createUser(request: CreateUserRequest) {
     return this.http.post('/api/users', request);
   }
@@ -108,6 +114,10 @@ export class ApiClientService {
 
   createTicketType(request: CreateTicketTypeRequest) {
     return this.http.post<TicketType>('/api/ticket-types', request);
+  }
+
+  updateTicketType(id: string, request: UpdateTicketTypeRequest) {
+    return this.http.put<TicketType>(`/api/ticket-types/${id}`, request);
   }
 
   deleteTicketType(id: string) {

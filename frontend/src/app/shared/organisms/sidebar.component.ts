@@ -19,7 +19,7 @@ import { WorkspaceTab } from '../../state/queue.models';
       </div>
 
       <label class="project-switcher">
-        Project
+        <span><span class="project-color-dot" [style.background]="selectedProjectColor()"></span>Project</span>
         <select [value]="selectedProjectId() ?? ''" (change)="projectSelected.emit(valueOf($event))">
           @for (project of projects(); track project.id) {
             <option [value]="project.id">{{ project.key }} - {{ project.name }}</option>
@@ -62,5 +62,9 @@ export class SidebarComponent {
 
   protected valueOf(event: Event): string {
     return (event.target as HTMLSelectElement).value;
+  }
+
+  protected selectedProjectColor(): string {
+    return this.projects().find((project) => project.id === this.selectedProjectId())?.color ?? '#667085';
   }
 }
