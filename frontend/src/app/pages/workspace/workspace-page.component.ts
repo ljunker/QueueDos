@@ -10,12 +10,6 @@ import {
   SavedTicketFilterView,
   Ticket
 } from '../../core/api.models';
-import {SidebarComponent} from '../../shared/organisms/sidebar.component';
-import {TicketDialogComponent} from '../../shared/organisms/ticket-dialog.component';
-import {ToastComponent} from '../../shared/atoms/toast.component';
-import {ProjectWizardComponent} from '../../shared/organisms/project-wizard.component';
-import {WorkspaceTabHostComponent} from '../../shared/organisms/workspace-tab-host.component';
-import {WorkspaceToolbarComponent} from '../../shared/organisms/workspace-toolbar.component';
 import {QueueActions} from '../../state/queue.actions';
 import {
   selectActiveTab,
@@ -73,7 +67,7 @@ import {
 @Component({
   selector: 'qd-workspace-page',
   standalone: true,
-  imports: [ProjectWizardComponent, SidebarComponent, TicketDialogComponent, ToastComponent, WorkspaceTabHostComponent, WorkspaceToolbarComponent],
+  imports: [],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading() && !data()) {
@@ -146,6 +140,7 @@ import {
             (commentSubmitted)="store.dispatch(commentCreateRequested($event))"
             (projectWizardOpened)="store.dispatch(projectWizardOpened())"
             (projectUpdated)="store.dispatch(projectUpdateRequested($event))"
+            (projectDeleted)="store.dispatch(projectDeleteRequested({ projectId: $event }))"
             (projectSelected)="dispatchProjectSelected($event)"
             (userCreated)="store.dispatch(userCreateRequested({ request: $event }))"
             (userUpdated)="store.dispatch(userUpdateRequested($event))"
@@ -256,6 +251,7 @@ export class WorkspacePageComponent {
   protected readonly projectWizardOpened = QueueActions.projectWizardOpened;
   protected readonly projectWizardClosed = QueueActions.projectWizardClosed;
   protected readonly projectUpdateRequested = QueueActions.projectUpdateRequested;
+  protected readonly projectDeleteRequested = QueueActions.projectDeleteRequested;
   protected readonly userCreateRequested = QueueActions.userCreateRequested;
   protected readonly userUpdateRequested = QueueActions.userUpdateRequested;
   protected readonly ticketTypeCreateRequested = QueueActions.ticketTypeCreateRequested;

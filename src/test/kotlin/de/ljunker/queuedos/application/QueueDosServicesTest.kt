@@ -104,6 +104,54 @@ class QueueDosServicesTest {
     }
 
     @Test
+    fun onlyAdminsCanDeleteProjectsAndTheirConfiguration() {
+        val services = newServices()
+        val admin = admin(services)
+        val member = services.auth.login(LoginCommand("member@queuedos.local", "member")).user
+        val project = services.projects.create(
+            admin,
+            CreateProjectCommand(
+                key = "DEL",
+                name = "Disposable",
+                description = "",
+                ticketTypes = validTypes(),
+                statuses = validStatuses()
+            )
+        )
+        val beforeDelete = services.queries.bootstrap(admin)
+        val type = beforeDelete.ticketTypes.single { it.projectId == project.id }
+        val workflow = beforeDelete.workflows.single { it.projectId == project.id }
+        val ticket = services.tickets.create(
+            admin,
+            CreateTicketCommand(
+                projectId = project.id,
+                title = "Delete with project",
+                description = "",
+                typeId = type.id,
+                priority = Priority.MEDIUM,
+                assigneeId = null,
+                statusId = workflow.statuses.first().id,
+                labels = emptyList(),
+                dueDate = null,
+                estimate = null
+            )
+        )
+
+        val forbidden = assertFailsWith<QueueDosFailure> {
+            services.projects.delete(member, project.id)
+        }
+        assertEquals(FailureKind.FORBIDDEN, forbidden.kind)
+
+        services.projects.delete(admin, project.id)
+
+        val afterDelete = services.queries.bootstrap(admin)
+        assertTrue(afterDelete.projects.none { it.id == project.id })
+        assertTrue(afterDelete.ticketTypes.none { it.projectId == project.id })
+        assertTrue(afterDelete.workflows.none { it.projectId == project.id })
+        assertTrue(afterDelete.tickets.none { it.id == ticket.id })
+    }
+
+    @Test
     fun invalidWizardConfigurationRollsBackTheWholeProject() {
         val services = newServices()
         val admin = admin(services)

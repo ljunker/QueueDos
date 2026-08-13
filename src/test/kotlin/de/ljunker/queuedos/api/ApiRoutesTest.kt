@@ -236,6 +236,25 @@ class ApiRoutesTest {
             HttpStatusCode.NoContent,
             client.delete("/api/activity-hooks/${hook.id}") { auth(adminToken) }.status
         )
+
+        assertEquals(
+            HttpStatusCode.Forbidden,
+            client.delete("/api/projects/${project.id}") { auth(memberToken) }.status
+        )
+        assertEquals(
+            HttpStatusCode.NoContent,
+            client.delete("/api/projects/${project.id}") { auth(adminToken) }.status
+        )
+        val afterProjectDelete = client.get("/api/bootstrap") { auth(adminToken) }.body<BootstrapResponse>()
+        assertTrue(afterProjectDelete.projects.none { it.id == project.id })
+        assertTrue(afterProjectDelete.ticketTypes.none { it.projectId == project.id })
+        assertTrue(afterProjectDelete.workflows.none { it.projectId == project.id })
+        assertTrue(afterProjectDelete.tickets.none { it.projectId == project.id })
+        assertTrue(afterProjectDelete.deletedTickets.none { it.projectId == project.id })
+        assertEquals(
+            HttpStatusCode.NotFound,
+            client.get("/api/tickets/${ticket.id}") { auth(adminToken) }.status
+        )
     }
 
     @Test

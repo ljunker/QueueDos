@@ -245,6 +245,14 @@ class ProjectService(
             ).also(repositories.projects::update)
         }
 
+    fun delete(actor: User, projectId: String) {
+        transactions.inTransaction {
+            AuthorizationPolicies.requireAdmin(actor)
+            val project = requireProject(actor, projectId)
+            repositories.projects.delete(actor.organizationId, project.id)
+        }
+    }
+
     private fun configuredTicketTypes(
         actor: User,
         project: Project,

@@ -207,6 +207,14 @@ private class JdbcProjectRepository(
         )
     }
 
+    override fun delete(organizationId: String, projectId: String) {
+        connection().execute(
+            "DELETE FROM queuedos_projects WHERE organization_id = ? AND id = ?",
+            organizationId,
+            projectId
+        )
+    }
+
     private fun findById(organizationId: String, projectId: String, forUpdate: Boolean): Project? =
         connection().queryOne(
             """

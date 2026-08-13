@@ -26,8 +26,8 @@ import {
   UpdateActivityHookRequest,
   UpdateProjectRequest,
   UpdateSavedTicketFilterRequest,
-  UpdateTicketTypeRequest,
   UpdateTicketRequest,
+  UpdateTicketTypeRequest,
   UpdateUserRequest
 } from './api.models';
 
@@ -102,6 +102,10 @@ export class ApiClientService {
 
   updateProject(id: string, request: UpdateProjectRequest) {
     return this.http.put<Project>(`/api/projects/${id}`, request);
+  }
+
+  deleteProject(id: string) {
+    return this.http.delete<void>(`/api/projects/${id}`);
   }
 
   createUser(request: CreateUserRequest) {

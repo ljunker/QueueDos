@@ -1,4 +1,4 @@
-import {ChangeDetectionStrategy, Component, effect, input, output} from '@angular/core';
+import {ChangeDetectionStrategy, Component, effect, input, output, signal} from '@angular/core';
 import {FormControl, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 
 import {Project, Ticket, UpdateProjectRequest} from '../../core/api.models';
@@ -60,6 +60,34 @@ import {Project, Ticket, UpdateProjectRequest} from '../../core/api.models';
             <button type="submit" class="primary" [disabled]="projectForm.invalid || projectForm.pristine">Save project</button>
           </div>
         </form>
+
+        <section class="project-danger-zone">
+          <div>
+            <strong>Delete project</strong>
+            <p>This permanently deletes the project and all of its tickets, ticket types, workflow and saved project
+              filters.</p>
+          </div>
+          @if (!deleteConfirming()) {
+            <button type="button" class="danger" (click)="startDeleteConfirmation()">Delete project</button>
+          } @else {
+            <div class="project-delete-confirmation">
+              <label>
+                <span>Type <strong>{{ project.key }}</strong> to confirm</span>
+                <input [formControl]="deleteConfirmation" autocomplete="off" [placeholder]="project.key">
+              </label>
+              <div class="row-actions">
+                <button type="button" (click)="cancelDeleteConfirmation()">Cancel</button>
+                <button
+                    type="button"
+                    class="danger"
+                    [disabled]="deleteConfirmation.value.trim() !== project.key"
+                    (click)="confirmProjectDeletion(project)">
+                  Delete project permanently
+                </button>
+              </div>
+            </div>
+          }
+        </section>
       }
     </section>
   `
@@ -72,6 +100,10 @@ export class AdminProjectsPanelComponent {
   readonly projectWizardOpened = output<void>();
   readonly projectUpdated = output<{projectId: string; request: UpdateProjectRequest}>();
   readonly projectSelected = output<string>();
+  readonly projectDeleted = output<string>();
+
+  protected readonly deleteConfirming = signal(false);
+  protected readonly deleteConfirmation = new FormControl('', {nonNullable: true});
 
   protected readonly projectForm = new FormGroup({
     key: new FormControl('', {
@@ -93,6 +125,7 @@ export class AdminProjectsPanelComponent {
         description: project.description,
         color: project.color
       });
+      this.cancelDeleteConfirmation();
     });
   }
 
@@ -114,6 +147,21 @@ export class AdminProjectsPanelComponent {
         color: value.color
       }
     });
+  }
+
+  protected startDeleteConfirmation(): void {
+    this.deleteConfirmation.reset('');
+    this.deleteConfirming.set(true);
+  }
+
+  protected cancelDeleteConfirmation(): void {
+    this.deleteConfirming.set(false);
+    this.deleteConfirmation.reset('');
+  }
+
+  protected confirmProjectDeletion(project: Project): void {
+    if (this.deleteConfirmation.value.trim() !== project.key) return;
+    this.projectDeleted.emit(project.id);
   }
 
   protected ticketCount(projectId: string): number {

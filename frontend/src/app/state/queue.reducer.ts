@@ -1,7 +1,7 @@
-import { createReducer, on } from '@ngrx/store';
+import {createReducer, on} from '@ngrx/store';
 
-import { BootstrapResponse, TicketDetailResponse, TicketRevisionDetail, Workflow } from '../core/api.models';
-import { QueueActions } from './queue.actions';
+import {BootstrapResponse, TicketDetailResponse, TicketRevisionDetail, Workflow} from '../core/api.models';
+import {QueueActions} from './queue.actions';
 import {
   cloneWorkflow,
   defaultFilters,
@@ -274,6 +274,18 @@ export const queueReducer = createReducer(
     projectCreating: false,
     projectCreateError: error
   })),
+    on(QueueActions.projectDeleted, (state, {projectId}) => {
+      if (state.selectedProjectId !== projectId) return state;
+      return {
+        ...state,
+        selectedProjectId: null,
+        detailTicketId: null,
+        ticketDetail: null,
+        openedRevision: null,
+        ticketDialog: null,
+        workflowDraft: null
+      };
+    }),
   on(QueueActions.ticketUpdateVersionConflict, (state, conflict) => ({
     ...state,
     ticketVersionConflict: conflict,

@@ -301,6 +301,21 @@ export class QueueEffects {
     )
   );
 
+    readonly deleteProject$ = createEffect(() =>
+        this.actions$.pipe(
+            ofType(QueueActions.projectDeleteRequested),
+            concatMap(({projectId}) =>
+                this.api.deleteProject(projectId).pipe(
+                    switchMap(() => [
+                        QueueActions.projectDeleted({projectId}),
+                        QueueActions.mutationSucceeded({message: 'Project deleted.'})
+                    ]),
+                    catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Project could not be deleted.')})))
+        )
+      )
+    )
+  );
+
   readonly createUser$ = createEffect(() =>
     this.actions$.pipe(
       ofType(QueueActions.userCreateRequested),
@@ -502,6 +517,7 @@ export class QueueEffects {
       this.actions$.pipe(
         ofType(
           QueueActions.projectSelected,
+            QueueActions.projectDeleted,
           QueueActions.tabSelected,
           QueueActions.ticketDetailOpened,
           QueueActions.detailClosed,

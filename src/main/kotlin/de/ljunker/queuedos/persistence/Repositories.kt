@@ -26,6 +26,7 @@ interface ProjectRepository {
     fun hasTickets(projectId: String): Boolean
     fun insert(project: Project)
     fun update(project: Project)
+    fun delete(organizationId: String, projectId: String)
 }
 
 interface TicketTypeRepository {

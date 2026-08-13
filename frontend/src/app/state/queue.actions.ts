@@ -93,6 +93,8 @@ export const QueueActions = createActionGroup({
     'Project Wizard Opened': emptyProps(),
     'Project Wizard Closed': emptyProps(),
     'Project Update Requested': props<{ projectId: string; request: UpdateProjectRequest }>(),
+    'Project Delete Requested': props<{ projectId: string }>(),
+    'Project Deleted': props<{ projectId: string }>(),
     'User Create Requested': props<{ request: CreateUserRequest }>(),
     'User Update Requested': props<{ userId: string; request: UpdateUserRequest }>(),
     'Ticket Type Create Requested': props<{ request: CreateTicketTypeRequest }>(),

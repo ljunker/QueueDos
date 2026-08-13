@@ -711,6 +711,39 @@ qd-workspace-tab-host {
   border-top: 1px solid var(--line);
 }
 
+.project-danger-zone {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--radius);
+  background: var(--danger-bg);
+}
+
+.project-danger-zone p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.project-delete-confirmation {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: end;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--danger-border);
+}
+
+.project-delete-confirmation label span,
+.project-delete-confirmation label strong {
+  color: var(--text);
+}
+
 .ticket-type-create-form {
   display: grid;
   grid-template-columns: minmax(110px, 0.8fr) minmax(150px, 1.3fr) 44px auto;
@@ -1369,6 +1402,17 @@ qd-workspace-tab-host {
   .wizard-editor-row,
   .wizard-review {
     grid-template-columns: 1fr;
+  }
+
+  .project-danger-zone,
+  .project-delete-confirmation {
+    grid-template-columns: 1fr;
+  }
+
+  .project-danger-zone > .danger,
+  .project-delete-confirmation .row-actions,
+  .project-delete-confirmation .row-actions button {
+    width: 100%;
   }
 
   .transition-controls {

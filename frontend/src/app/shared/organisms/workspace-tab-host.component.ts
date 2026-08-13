@@ -33,24 +33,11 @@ import {
   WorkflowTransitionPatch,
   WorkspaceTab
 } from '../../state/queue.models';
-import {AdminViewComponent} from './admin-view.component';
-import {BoardViewComponent} from './board-view.component';
-import {MyTicketsViewComponent} from './my-tickets-view.component';
-import {ProjectDashboardViewComponent} from './project-dashboard-view.component';
-import {TicketDetailViewComponent} from './ticket-detail-view.component';
-import {TicketListViewComponent} from './ticket-list-view.component';
 
 @Component({
   selector: 'qd-workspace-tab-host',
   standalone: true,
-  imports: [
-    AdminViewComponent,
-    BoardViewComponent,
-    MyTicketsViewComponent,
-    ProjectDashboardViewComponent,
-    TicketDetailViewComponent,
-    TicketListViewComponent
-  ],
+  imports: [],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="tab-panel">
@@ -147,6 +134,7 @@ import {TicketListViewComponent} from './ticket-list-view.component';
               [workflowDraft]="workflowDraft()"
               (projectWizardOpened)="projectWizardOpened.emit()"
               (projectUpdated)="projectUpdated.emit($event)"
+              (projectDeleted)="projectDeleted.emit($event)"
               (projectSelected)="projectSelected.emit($event)"
               (userCreated)="userCreated.emit($event)"
               (userToggled)="userUpdated.emit({ userId: $event.userId, request: { active: $event.active } })"
@@ -216,6 +204,7 @@ export class WorkspaceTabHostComponent {
   readonly projectWizardOpened = output<void>();
   readonly projectUpdated = output<{projectId: string; request: UpdateProjectRequest}>();
   readonly projectSelected = output<string>();
+  readonly projectDeleted = output<string>();
   readonly userCreated = output<CreateUserRequest>();
   readonly userUpdated = output<{ userId: string; request: UpdateUserRequest }>();
   readonly ticketTypeCreated = output<CreateTicketTypeRequest>();

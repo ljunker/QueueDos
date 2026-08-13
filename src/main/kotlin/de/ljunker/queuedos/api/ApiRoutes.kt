@@ -196,6 +196,11 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
+            delete("/api/projects/{id}") {
+                services.projects.delete(call.actor(), call.pathId())
+                call.respond(HttpStatusCode.NoContent)
+            }
+
             post("/api/users") {
                 call.respond(
                     HttpStatusCode.Created,

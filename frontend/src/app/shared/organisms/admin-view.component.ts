@@ -15,24 +15,11 @@ import {
   Workflow
 } from '../../core/api.models';
 import {WorkflowStatusPatch, WorkflowTransitionPatch} from '../../state/queue.models';
-import {AdminProjectsPanelComponent} from './admin-projects-panel.component';
-import {AdminTicketTypesPanelComponent} from './admin-ticket-types-panel.component';
-import {AdminActivityHooksPanelComponent} from './admin-activity-hooks-panel.component';
-import {AdminDeletedTicketsPanelComponent} from './admin-deleted-tickets-panel.component';
-import {AdminUsersPanelComponent} from './admin-users-panel.component';
-import {AdminWorkflowPanelComponent} from './admin-workflow-panel.component';
 
 @Component({
   selector: 'qd-admin-view',
   standalone: true,
-  imports: [
-    AdminActivityHooksPanelComponent,
-    AdminDeletedTicketsPanelComponent,
-    AdminProjectsPanelComponent,
-    AdminTicketTypesPanelComponent,
-    AdminUsersPanelComponent,
-    AdminWorkflowPanelComponent
-  ],
+  imports: [],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="admin-grid">
@@ -42,6 +29,7 @@ import {AdminWorkflowPanelComponent} from './admin-workflow-panel.component';
         [tickets]="tickets()"
         (projectWizardOpened)="projectWizardOpened.emit()"
         (projectUpdated)="projectUpdated.emit($event)"
+        (projectDeleted)="projectDeleted.emit($event)"
         (projectSelected)="projectSelected.emit($event)" />
       <qd-admin-users-panel
         [users]="users()"
@@ -87,6 +75,7 @@ export class AdminViewComponent {
   readonly projectWizardOpened = output<void>();
   readonly projectUpdated = output<{projectId: string; request: UpdateProjectRequest}>();
   readonly projectSelected = output<string>();
+  readonly projectDeleted = output<string>();
   readonly userCreated = output<CreateUserRequest>();
   readonly userToggled = output<{ userId: string; active: boolean }>();
   readonly ticketTypeCreated = output<CreateTicketTypeRequest>();
