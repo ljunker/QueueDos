@@ -23,6 +23,7 @@ export const selectError = createSelector(selectQueueState, (state) => state.err
 export const selectLoginError = createSelector(selectQueueState, (state) => state.loginError);
 export const selectTheme = createSelector(selectQueueState, (state) => state.theme);
 export const selectActiveTab = createSelector(selectQueueState, (state) => state.activeTab);
+export const selectActiveAdminPage = createSelector(selectQueueState, (state) => state.activeAdminPage);
 export const selectFilters = createSelector(selectQueueState, (state) => state.filters);
 export const selectMyTicketsFilters = createSelector(selectQueueState, (state) => state.myTicketsFilters);
 export const selectSelectedProjectId = createSelector(selectQueueState, (state) => state.selectedProjectId);
@@ -118,13 +119,15 @@ export const selectSelectedTicketLegacyChanges = createSelector(
 
 export const selectUrlQueryParams = createSelector(
   selectActiveTab,
+  selectActiveAdminPage,
   selectSelectedProjectId,
   selectDetailTicketId,
   selectFilters,
   selectMyTicketsFilters,
-  (activeTab, projectId, ticketId, filters, myTicketsFilters) => {
+  (activeTab, adminPage, projectId, ticketId, filters, myTicketsFilters) => {
     const queryParams: Record<string, string> = {};
     if (activeTab !== 'board') queryParams['tab'] = activeTab;
+    if (activeTab === 'admin' && adminPage !== 'overview') queryParams['admin'] = adminPage;
     if (projectId) queryParams['projectId'] = projectId;
     if (ticketId) queryParams['ticketId'] = ticketId;
     if (filters.q) queryParams['q'] = filters.q;

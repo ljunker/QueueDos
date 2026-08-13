@@ -28,6 +28,7 @@ import {
 } from '../../core/api.models';
 import {
   MyTicketsFilters,
+  AdminPage,
   TicketFilters,
   WorkflowStatusPatch,
   WorkflowTransitionPatch,
@@ -137,20 +138,24 @@ import {TicketListViewComponent} from './ticket-list-view.component';
         @case ('admin') {
           @if (isAdmin()) {
             <qd-admin-view
+              [activePage]="activeAdminPage()"
               [projects]="projects()"
               [selectedProject]="selectedProject()"
               [tickets]="data()?.tickets ?? []"
               [deletedTickets]="data()?.deletedTickets ?? []"
               [activityHooks]="data()?.activityHooks ?? []"
               [users]="users()"
+              [currentUser]="currentUser()"
               [projectTypes]="projectTypes()"
               [workflowDraft]="workflowDraft()"
+              (pageSelected)="adminPageSelected.emit($event)"
               (projectWizardOpened)="projectWizardOpened.emit()"
               (projectUpdated)="projectUpdated.emit($event)"
               (projectDeleted)="projectDeleted.emit($event)"
               (projectSelected)="projectSelected.emit($event)"
               (userCreated)="userCreated.emit($event)"
-              (userToggled)="userUpdated.emit({ userId: $event.userId, request: { active: $event.active } })"
+              (userUpdated)="userUpdated.emit($event)"
+              (temporaryPasswordRequested)="temporaryPasswordRequested.emit($event)"
               (ticketTypeCreated)="ticketTypeCreated.emit($event)"
               (ticketTypeUpdated)="ticketTypeUpdated.emit($event)"
               (ticketTypeDeleted)="ticketTypeDeleted.emit($event)"
@@ -175,6 +180,7 @@ import {TicketListViewComponent} from './ticket-list-view.component';
 export class WorkspaceTabHostComponent {
   readonly data = input<BootstrapResponse | null>(null);
   readonly activeTab = input<WorkspaceTab>('board');
+  readonly activeAdminPage = input<AdminPage>('overview');
   readonly isAdmin = input(false);
   readonly projects = input<Project[]>([]);
   readonly selectedProject = input<Project | null>(null);
@@ -218,8 +224,10 @@ export class WorkspaceTabHostComponent {
   readonly projectUpdated = output<{projectId: string; request: UpdateProjectRequest}>();
   readonly projectSelected = output<string>();
   readonly projectDeleted = output<string>();
-  readonly userCreated = output<CreateUserRequest>();
+  readonly adminPageSelected = output<AdminPage>();
+  readonly userCreated = output<{request: CreateUserRequest; generateTemporaryPassword: boolean}>();
   readonly userUpdated = output<{ userId: string; request: UpdateUserRequest }>();
+  readonly temporaryPasswordRequested = output<PublicUser>();
   readonly ticketTypeCreated = output<CreateTicketTypeRequest>();
   readonly ticketTypeUpdated = output<{typeId: string; request: UpdateTicketTypeRequest}>();
   readonly ticketTypeDeleted = output<string>();

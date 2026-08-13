@@ -22,7 +22,13 @@ data class LoginRequest(
 @Serializable
 data class LoginResponse(
     val token: String,
-    val user: UserResponse
+    val user: UserResponse,
+    val passwordChangeRequired: Boolean = false
+)
+
+@Serializable
+data class ChangePasswordRequest(
+    val newPassword: String
 )
 
 @Serializable
@@ -98,7 +104,9 @@ data class UserResponse(
     val email: String,
     val displayName: String,
     val role: Role,
-    val active: Boolean
+    val active: Boolean,
+    val localLoginEnabled: Boolean,
+    val mustChangePassword: Boolean
 )
 
 @Serializable
@@ -268,7 +276,12 @@ data class CreateUserRequest(
     val email: String,
     val displayName: String,
     val role: Role = Role.MEMBER,
-    val password: String
+    val password: String? = null
+)
+
+@Serializable
+data class TemporaryPasswordResponse(
+    val temporaryPassword: String
 )
 
 @Serializable

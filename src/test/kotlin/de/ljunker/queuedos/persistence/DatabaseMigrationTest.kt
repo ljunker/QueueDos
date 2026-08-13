@@ -19,6 +19,8 @@ class DatabaseMigrationTest {
         val admin = backend.services.auth.login(LoginCommand("admin@queuedos.local", "admin")).user
 
         assertEquals("user-admin", admin.id)
+        assertTrue(admin.localLoginEnabled)
+        assertEquals(false, admin.mustChangePassword)
         assertEquals("#2563eb", backend.services.queries.bootstrap(admin).projects.single().color)
         dataSource.connection.use { connection ->
             connection.createStatement().use { statement ->
@@ -29,6 +31,13 @@ class DatabaseMigrationTest {
                 statement.executeQuery("SELECT count(*) FROM queuedos_ticket_revisions WHERE action = 'CREATED'").use {
                     assertTrue(it.next())
                     assertTrue(it.getInt(1) > 0)
+                }
+                statement.executeQuery(
+                    "SELECT local_login_enabled, must_change_password FROM queuedos_users WHERE id = 'user-admin'"
+                ).use {
+                    assertTrue(it.next())
+                    assertTrue(it.getBoolean("local_login_enabled"))
+                    assertEquals(false, it.getBoolean("must_change_password"))
                 }
             }
         }

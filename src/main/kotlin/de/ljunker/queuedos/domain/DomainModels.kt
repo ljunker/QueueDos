@@ -32,7 +32,9 @@ data class User(
     val role: Role,
     val active: Boolean,
     val passwordSalt: String,
-    val passwordHash: String
+    val passwordHash: String,
+    val localLoginEnabled: Boolean = true,
+    val mustChangePassword: Boolean = false
 )
 
 @Serializable

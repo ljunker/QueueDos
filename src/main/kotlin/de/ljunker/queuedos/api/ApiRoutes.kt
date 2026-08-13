@@ -23,6 +23,15 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
             call.respond(services.auth.login(call.receive<LoginRequest>().toCommand()).toResponse())
         }
 
+        passwordChangeAuthenticated {
+            post("/api/auth/change-password") {
+                call.respond(
+                    services.auth.changePassword(call.actor(), call.receive<ChangePasswordRequest>().newPassword)
+                        .toResponse()
+                )
+            }
+        }
+
         get("/api/auth/config") {
             call.respond(AuthConfigResponse(microsoftEnabled = services.microsoftSso.enabled))
         }
@@ -212,6 +221,14 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 call.respond(
                     services.users.update(call.actor(), call.pathId(), call.receive<UpdateUserRequest>().toCommand())
                         .toResponse()
+                )
+            }
+
+            post("/api/users/{id}/temporary-password") {
+                call.respond(
+                    TemporaryPasswordResponse(
+                        services.users.generateTemporaryPassword(call.actor(), call.pathId())
+                    )
                 )
             }
 

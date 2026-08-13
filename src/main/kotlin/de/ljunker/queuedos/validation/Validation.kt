@@ -47,8 +47,8 @@ internal fun requireName(value: String, label: String): String {
 }
 
 internal fun requirePassword(value: String): String {
-    if (value.length < 4) {
-        throw BadRequestFailure("Password must have at least 4 characters.")
+    if (value.length < 8) {
+        throw BadRequestFailure("Password must have at least 8 characters.")
     }
     return value
 }

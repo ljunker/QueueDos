@@ -22,6 +22,9 @@ export class AppComponent {
 
   constructor() {
     this.store.dispatch(QueueActions.themeInitialized({ theme: this.theme.readInitialTheme() }));
-    this.store.dispatch(QueueActions.appStarted({ token: this.auth.token() }));
+    this.store.dispatch(QueueActions.appStarted({
+      token: this.auth.token(),
+      passwordChangeRequired: this.auth.passwordChangeRequired()
+    }));
   }
 }

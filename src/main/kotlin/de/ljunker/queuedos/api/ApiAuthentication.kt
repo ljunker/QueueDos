@@ -17,11 +17,20 @@ internal fun Application.configureApiAuthentication(auth: AuthenticationService)
                 auth.userByToken(credentials.token)?.let(::ActorPrincipal)
             }
         }
+        bearer("queuedos-password-change") {
+            realm = "QueueDos password change"
+            authenticate { credentials ->
+                auth.userByPasswordChangeToken(credentials.token)?.let(::ActorPrincipal)
+            }
+        }
     }
 }
 
 internal fun Route.authenticated(build: Route.() -> Unit): Route =
     authenticate("queuedos", build = build)
+
+internal fun Route.passwordChangeAuthenticated(build: Route.() -> Unit): Route =
+    authenticate("queuedos-password-change", build = build)
 
 internal fun ApplicationCall.actor(): User =
     principal<ActorPrincipal>()?.user ?: throw UnauthorizedFailure("Authentication required.")

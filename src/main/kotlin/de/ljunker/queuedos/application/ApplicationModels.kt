@@ -61,7 +61,7 @@ data class CreateUserCommand(
     val email: String,
     val displayName: String,
     val role: Role,
-    val password: String
+    val password: String?
 )
 
 data class UpdateUserCommand(

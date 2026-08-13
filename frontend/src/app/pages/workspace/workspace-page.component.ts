@@ -19,6 +19,7 @@ import {WorkspaceToolbarComponent} from '../../shared/organisms/workspace-toolba
 import {QueueActions} from '../../state/queue.actions';
 import {
   selectActiveTab,
+  selectActiveAdminPage,
   selectActiveUsers,
   selectCurrentUser,
   selectData,
@@ -63,6 +64,7 @@ import {
 } from '../../state/queue.selectors';
 import {
   MyTicketsFilters,
+  AdminPage,
   myTicketsSort,
   RouteWorkspaceState,
   TicketFilters,
@@ -99,9 +101,11 @@ import {
           [selectedProjectId]="selectedProjectId()"
           [user]="currentUser()"
           [activeTab]="activeTab()"
+          [activeAdminPage]="activeAdminPage()"
           [isAdmin]="isAdmin()"
           (projectSelected)="dispatchProjectSelected($event)"
           (tabSelected)="dispatchTabSelected($event)"
+          (adminPageSelected)="store.dispatch(adminPageSelected({page: $event}))"
           (logoutRequested)="store.dispatch(logoutRequested())" />
 
         <section class="workspace">
@@ -113,6 +117,7 @@ import {
           <qd-workspace-tab-host
             [data]="data()"
             [activeTab]="activeTab()"
+            [activeAdminPage]="activeAdminPage()"
             [isAdmin]="isAdmin()"
             [projects]="projects()"
             [selectedProject]="selectedProject()"
@@ -155,8 +160,10 @@ import {
             (projectUpdated)="store.dispatch(projectUpdateRequested($event))"
             (projectDeleted)="store.dispatch(projectDeleteRequested({ projectId: $event }))"
             (projectSelected)="dispatchProjectSelected($event)"
-            (userCreated)="store.dispatch(userCreateRequested({ request: $event }))"
+            (adminPageSelected)="store.dispatch(adminPageSelected({page: $event}))"
+            (userCreated)="store.dispatch(userCreateRequested($event))"
             (userUpdated)="store.dispatch(userUpdateRequested($event))"
+            (temporaryPasswordRequested)="store.dispatch(userTemporaryPasswordRequested({user: $event}))"
             (ticketTypeCreated)="store.dispatch(ticketTypeCreateRequested({ request: $event }))"
             (ticketTypeUpdated)="store.dispatch(ticketTypeUpdateRequested($event))"
             (ticketTypeDeleted)="store.dispatch(ticketTypeDeleteRequested({ typeId: $event }))"
@@ -225,6 +232,7 @@ export class WorkspacePageComponent {
   protected readonly activeUsers = this.store.selectSignal(selectActiveUsers);
   protected readonly isAdmin = this.store.selectSignal(selectIsAdmin);
   protected readonly activeTab = this.store.selectSignal(selectActiveTab);
+  protected readonly activeAdminPage = this.store.selectSignal(selectActiveAdminPage);
   protected readonly workflow = this.store.selectSignal(selectSelectedWorkflow);
   protected readonly statuses = this.store.selectSignal(selectSortedStatuses);
   protected readonly projectTickets = this.store.selectSignal(selectProjectTickets);
@@ -267,6 +275,8 @@ export class WorkspacePageComponent {
   protected readonly projectDeleteRequested = QueueActions.projectDeleteRequested;
   protected readonly userCreateRequested = QueueActions.userCreateRequested;
   protected readonly userUpdateRequested = QueueActions.userUpdateRequested;
+  protected readonly userTemporaryPasswordRequested = QueueActions.userTemporaryPasswordRequested;
+  protected readonly adminPageSelected = QueueActions.adminPageSelected;
   protected readonly ticketTypeCreateRequested = QueueActions.ticketTypeCreateRequested;
   protected readonly ticketTypeUpdateRequested = QueueActions.ticketTypeUpdateRequested;
   protected readonly ticketTypeDeleteRequested = QueueActions.ticketTypeDeleteRequested;
@@ -408,6 +418,7 @@ function routeStateFromParams(params: ParamMap): RouteWorkspaceState {
   const activeTab = isWorkspaceTab(tab) ? tab : 'board';
   return {
     activeTab,
+    adminPage: adminPageFromParam(params.get('admin')),
     selectedProjectId: params.get('projectId') ?? undefined,
     detailTicketId: params.get('ticketId'),
     filters: {
@@ -427,6 +438,12 @@ function routeStateFromParams(params: ParamMap): RouteWorkspaceState {
       sort: myTicketsSort(params.get('mySort'))
     }
   };
+}
+
+function adminPageFromParam(value: string | null): AdminPage {
+  return value === 'users' || value === 'projects' || value === 'configuration' || value === 'integrations' || value === 'trash'
+    ? value
+    : 'overview';
 }
 
 function isWorkspaceTab(value: string | null): value is WorkspaceTab {

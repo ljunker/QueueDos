@@ -19,6 +19,8 @@ export interface PublicUser {
   displayName: string;
   role: Role;
   active: boolean;
+  localLoginEnabled: boolean;
+  mustChangePassword: boolean;
 }
 
 export interface Project {
@@ -179,6 +181,15 @@ export interface LoginRequest {
 export interface LoginResponse {
   token: string;
   user: PublicUser;
+  passwordChangeRequired: boolean;
+}
+
+export interface ChangePasswordRequest {
+  newPassword: string;
+}
+
+export interface TemporaryPasswordResponse {
+  temporaryPassword: string;
 }
 
 export interface AuthConfigResponse {
@@ -265,7 +276,7 @@ export interface CreateUserRequest {
   email: string;
   displayName: string;
   role: Role;
-  password: string;
+  password?: string;
 }
 
 export interface UpdateUserRequest {

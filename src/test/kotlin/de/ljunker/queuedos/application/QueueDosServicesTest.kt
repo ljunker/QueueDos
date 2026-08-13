@@ -11,6 +11,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class QueueDosServicesTest {
@@ -544,6 +545,113 @@ class QueueDosServicesTest {
     }
 
     @Test
+    fun azureOnlyUsersCanReceiveATemporaryPasswordAndMustReplaceIt() {
+        val services = newServices()
+        val admin = admin(services)
+        val user = services.users.create(
+            admin,
+            CreateUserCommand("azure-only@example.com", "Azure Only", Role.MEMBER, password = null)
+        )
+
+        assertFalse(user.localLoginEnabled)
+        assertFalse(user.mustChangePassword)
+        assertFailsWith<UnauthorizedFailure> {
+            services.auth.login(LoginCommand(user.email, "unknown-password"))
+        }
+
+        val temporaryPassword = services.users.generateTemporaryPassword(admin, user.id)
+        val pending = services.queries.bootstrap(admin).users.single { it.id == user.id }
+        assertTrue(pending.localLoginEnabled)
+        assertTrue(pending.mustChangePassword)
+
+        val temporaryLogin = services.auth.login(LoginCommand(user.email, temporaryPassword))
+        assertTrue(temporaryLogin.passwordChangeRequired)
+        assertNull(services.auth.userByToken(temporaryLogin.token))
+        val passwordChangeUser = services.auth.userByPasswordChangeToken(temporaryLogin.token)
+        assertEquals(user.id, passwordChangeUser?.id)
+
+        val session = services.auth.changePassword(passwordChangeUser!!, "new-password")
+        assertFalse(session.passwordChangeRequired)
+        assertEquals(user.id, services.auth.userByToken(session.token)?.id)
+        assertNull(services.auth.userByPasswordChangeToken(temporaryLogin.token))
+        assertFalse(services.auth.login(LoginCommand(user.email, "new-password")).passwordChangeRequired)
+        assertFailsWith<UnauthorizedFailure> {
+            services.auth.login(LoginCommand(user.email, temporaryPassword))
+        }
+    }
+
+    @Test
+    fun optionalAndDirectPasswordsEnableLocalLoginWithoutForcedChange() {
+        val services = newServices()
+        val admin = admin(services)
+        val local = services.users.create(
+            admin,
+            CreateUserCommand("local@example.com", "Local User", Role.MEMBER, "initial-password")
+        )
+        assertTrue(local.localLoginEnabled)
+        assertFalse(local.mustChangePassword)
+        assertFalse(services.auth.login(LoginCommand(local.email, "initial-password")).passwordChangeRequired)
+
+        val azureOnly = services.users.create(
+            admin,
+            CreateUserCommand("later-local@example.com", "Later Local", Role.MEMBER, null)
+        )
+        val updated = services.users.update(
+            admin,
+            azureOnly.id,
+            UpdateUserCommand(null, null, null, "direct-password")
+        )
+        assertTrue(updated.localLoginEnabled)
+        assertFalse(updated.mustChangePassword)
+        assertFalse(services.auth.login(LoginCommand(updated.email, "direct-password")).passwordChangeRequired)
+    }
+
+    @Test
+    fun inactiveUsersAndAdminSafetyRulesAreEnforced() {
+        val services = newServices()
+        val firstAdmin = admin(services)
+        val secondAdmin = services.users.create(
+            firstAdmin,
+            CreateUserCommand("second-admin@example.com", "Second Admin", Role.ADMIN, "admin-password")
+        )
+        val member = services.users.create(
+            firstAdmin,
+            CreateUserCommand("disabled@example.com", "Disabled User", Role.MEMBER, "member-password")
+        )
+
+        assertFailsWith<ConflictFailure> {
+            services.users.update(firstAdmin, firstAdmin.id, UpdateUserCommand(null, Role.MEMBER, null, null))
+        }
+        assertFailsWith<ConflictFailure> {
+            services.users.update(firstAdmin, firstAdmin.id, UpdateUserCommand(null, null, false, null))
+        }
+
+        services.users.update(firstAdmin, member.id, UpdateUserCommand(null, null, false, null))
+        assertFailsWith<UnauthorizedFailure> {
+            services.auth.login(LoginCommand(member.email, "member-password"))
+        }
+        assertFailsWith<UnauthorizedFailure> {
+            services.auth.loginMicrosoft(MicrosoftUserInfo(member.email, member.displayName), setOf("example.com"))
+        }
+
+        val executor = Executors.newFixedThreadPool(2)
+        val results = try {
+            executor.invokeAll(
+                listOf(
+                    Callable { runCatching { services.users.update(firstAdmin, secondAdmin.id, UpdateUserCommand(null, Role.MEMBER, null, null)) } },
+                    Callable { runCatching { services.users.update(secondAdmin, firstAdmin.id, UpdateUserCommand(null, Role.MEMBER, null, null)) } }
+                )
+            ).map { it.get() }
+        } finally {
+            executor.shutdownNow()
+        }
+        assertEquals(1, results.count(Result<User>::isSuccess))
+        assertEquals(1, results.count(Result<User>::isFailure))
+        val activeAdmins = services.queries.bootstrap(admin(services)).users.count { it.active && it.role == Role.ADMIN }
+        assertEquals(1, activeAdmins)
+    }
+
+    @Test
     fun microsoftSsoAuthenticatesExistingActiveUsers() {
         val backend = QueueDosBackend.create(
             PostgresTestBackend.freshDataSource(),
@@ -582,6 +690,8 @@ class QueueDosServicesTest {
         assertEquals("New User", first.user.displayName)
         assertEquals(Role.MEMBER, first.user.role)
         assertTrue(first.user.active)
+        assertFalse(first.user.localLoginEnabled)
+        assertFalse(first.user.mustChangePassword)
         assertEquals(first.user.id, backend.services.auth.userByToken(first.token)?.id)
         val users = backend.services.queries.bootstrap(admin(backend.services)).users
         assertEquals(1, users.count { it.email == "new.user@example.com" })

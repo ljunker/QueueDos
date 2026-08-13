@@ -13,6 +13,7 @@ import {
   LoginRequest,
   LoginResponse,
   Project,
+  PublicUser,
   SavedTicketFilter,
   SaveWorkflowRequest,
   Ticket,
@@ -27,6 +28,7 @@ import {
 } from '../core/api.models';
 import {
   MyTicketsFilters,
+  AdminPage,
   RouteWorkspaceState,
   ThemeMode,
   TicketDialogSave,
@@ -41,7 +43,7 @@ import {
 export const QueueActions = createActionGroup({
   source: 'Queue',
   events: {
-    'App Started': props<{ token: string | null }>(),
+    'App Started': props<{ token: string | null; passwordChangeRequired: boolean }>(),
     'Login Requested': props<{ request: LoginRequest }>(),
     'Login Succeeded': props<LoginResponse>(),
     'Login Failed': props<{ error: string }>(),
@@ -57,6 +59,7 @@ export const QueueActions = createActionGroup({
     'Route State Changed': props<{ state: RouteWorkspaceState }>(),
     'Project Selected': props<{ projectId: string }>(),
     'Tab Selected': props<{ tab: WorkspaceTab }>(),
+    'Admin Page Selected': props<{ page: AdminPage }>(),
     'Ticket Detail Opened': props<{ ticketId: string }>(),
     'Ticket Detail Load Requested': props<{ ticketId: string }>(),
     'Ticket Detail Load Succeeded': props<{ detail: TicketDetailResponse }>(),
@@ -95,8 +98,10 @@ export const QueueActions = createActionGroup({
     'Project Update Requested': props<{ projectId: string; request: UpdateProjectRequest }>(),
     'Project Delete Requested': props<{ projectId: string }>(),
     'Project Deleted': props<{ projectId: string }>(),
-    'User Create Requested': props<{ request: CreateUserRequest }>(),
+    'User Create Requested': props<{ request: CreateUserRequest; generateTemporaryPassword: boolean }>(),
     'User Update Requested': props<{ userId: string; request: UpdateUserRequest }>(),
+    'User Temporary Password Requested': props<{ user: PublicUser }>(),
+    'User Temporary Password Generated': emptyProps(),
     'Ticket Type Create Requested': props<{ request: CreateTicketTypeRequest }>(),
     'Ticket Type Update Requested': props<{ typeId: string; request: UpdateTicketTypeRequest }>(),
     'Ticket Type Delete Requested': props<{ typeId: string }>(),

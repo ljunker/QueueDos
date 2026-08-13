@@ -4,6 +4,7 @@ import {BootstrapResponse, TicketDetailResponse, TicketRevisionDetail, Workflow}
 import {QueueActions} from './queue.actions';
 import {
   cloneWorkflow,
+  AdminPage,
   defaultFilters,
   defaultMyTicketsFilters,
   DetailReturnTab,
@@ -27,6 +28,7 @@ export interface QueueState {
   theme: ThemeMode;
   selectedProjectId: string | null;
   activeTab: WorkspaceTab;
+  activeAdminPage: AdminPage;
   detailReturnTab: DetailReturnTab;
   detailTicketId: string | null;
   ticketDetail: TicketDetailResponse | null;
@@ -52,6 +54,7 @@ export const initialState: QueueState = {
   theme: 'light',
   selectedProjectId: null,
   activeTab: 'board',
+  activeAdminPage: 'overview',
   detailReturnTab: 'list',
   detailTicketId: null,
   ticketDetail: null,
@@ -115,6 +118,7 @@ export const queueReducer = createReducer(
       error: '',
       selectedProjectId,
       activeTab: state.activeTab === 'admin' && data.currentUser.role !== 'ADMIN' ? 'board' : state.activeTab,
+      activeAdminPage: data.currentUser.role === 'ADMIN' ? state.activeAdminPage : 'overview',
       workflowDraft: cloneWorkflow(workflowForProject(data, selectedProjectId))
     };
   }),
@@ -129,6 +133,10 @@ export const queueReducer = createReducer(
     return {
       ...state,
       activeTab: activeTab === 'admin' && state.data && state.data.currentUser.role !== 'ADMIN' ? 'board' : activeTab,
+      activeAdminPage:
+        activeTab === 'admin' && (!state.data || state.data.currentUser.role === 'ADMIN')
+          ? routeState.adminPage ?? 'overview'
+          : state.activeAdminPage,
       selectedProjectId,
       detailTicketId: routeState.detailTicketId !== undefined ? routeState.detailTicketId : state.detailTicketId,
       ticketDetail:
@@ -160,7 +168,14 @@ export const queueReducer = createReducer(
   on(QueueActions.tabSelected, (state, { tab }) => ({
     ...state,
     activeTab: tab,
-    detailTicketId: tab === 'detail' ? state.detailTicketId : null
+    detailTicketId: tab === 'detail' ? state.detailTicketId : null,
+    activeAdminPage: tab === 'admin' ? 'overview' : state.activeAdminPage
+  })),
+  on(QueueActions.adminPageSelected, (state, {page}) => ({
+    ...state,
+    activeTab: 'admin',
+    activeAdminPage: page,
+    detailTicketId: null
   })),
   on(QueueActions.ticketDetailOpened, (state, { ticketId }) => ({
     ...state,

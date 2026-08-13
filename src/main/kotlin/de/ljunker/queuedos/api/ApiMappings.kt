@@ -80,7 +80,7 @@ internal fun CreateActivityHookRequest.toCommand() =
 internal fun UpdateActivityHookRequest.toCommand() =
     UpdateActivityHookCommand(eventType, webhookUrl, messageTemplate, active)
 
-internal fun AuthenticatedUser.toResponse() = LoginResponse(token, user.toResponse())
+internal fun AuthenticatedUser.toResponse() = LoginResponse(token, user.toResponse(), passwordChangeRequired)
 
 internal fun BootstrapData.toResponse() =
     BootstrapResponse(
@@ -124,7 +124,8 @@ internal fun TicketRevision.toDetailResponse() = TicketRevisionDetailResponse(to
 
 internal fun Organization.toResponse() = OrganizationResponse(id, name)
 
-internal fun User.toResponse() = UserResponse(id, organizationId, email, displayName, role, active)
+internal fun User.toResponse() =
+    UserResponse(id, organizationId, email, displayName, role, active, localLoginEnabled, mustChangePassword)
 
 internal fun Project.toResponse() =
     ProjectResponse(id, organizationId, key, name, description, color, nextTicketNumber, archived)

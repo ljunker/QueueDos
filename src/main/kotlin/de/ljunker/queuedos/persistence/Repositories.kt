@@ -17,6 +17,7 @@ interface UserRepository {
     fun emailExists(organizationId: String, email: String): Boolean
     fun insert(user: User)
     fun insertIfEmailAbsent(user: User): Boolean
+    fun countActiveAdminsForUpdate(organizationId: String): Int
     fun update(user: User)
 }
 

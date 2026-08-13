@@ -67,14 +67,14 @@ export class LoginPageComponent {
   constructor() {
     const microsoftToken = new URLSearchParams(window.location.hash.slice(1)).get('microsoftToken');
     if (microsoftToken) {
-      this.auth.set(microsoftToken);
+      this.auth.set(microsoftToken, false);
       history.replaceState(null, '', '/login');
       this.store.dispatch(QueueActions.bootstrapRequested());
       void this.router.navigateByUrl('/');
       return;
     }
     if (this.auth.hasToken()) {
-      void this.router.navigateByUrl('/');
+      void this.router.navigateByUrl(this.auth.passwordChangeRequired() ? '/change-password' : '/');
     }
     this.api.authConfig().subscribe({
       next: ({microsoftEnabled}) => this.microsoftEnabled.set(microsoftEnabled)

@@ -7,5 +7,14 @@ export const authGuard: CanActivateFn = () => {
   const auth = inject(AuthTokenService);
   const router = inject(Router);
 
-  return auth.hasToken() || router.parseUrl('/login');
+  if (!auth.hasToken()) return router.parseUrl('/login');
+  return auth.passwordChangeRequired() ? router.parseUrl('/change-password') : true;
+};
+
+export const passwordChangeGuard: CanActivateFn = () => {
+  const auth = inject(AuthTokenService);
+  const router = inject(Router);
+
+  if (!auth.hasToken()) return router.parseUrl('/login');
+  return auth.passwordChangeRequired() || router.parseUrl('/');
 };

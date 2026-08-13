@@ -9,6 +9,7 @@ import {
 } from '../core/api.models';
 
 export type WorkspaceTab = 'board' | 'dashboard' | 'list' | 'my-tickets' | 'detail' | 'admin';
+export type AdminPage = 'overview' | 'users' | 'projects' | 'configuration' | 'integrations' | 'trash';
 export type DetailReturnTab = Exclude<WorkspaceTab, 'detail'>;
 export type TicketSort = 'number' | 'title' | 'priority' | 'status' | 'updated';
 export type MyTicketsSort = Exclude<TicketSort, 'status'>;
@@ -34,10 +35,17 @@ export interface MyTicketsFilters {
 
 export interface RouteWorkspaceState {
   activeTab?: WorkspaceTab;
+  adminPage?: AdminPage;
   selectedProjectId?: string;
   detailTicketId?: string | null;
   filters?: Partial<TicketFilters>;
   myTicketsFilters?: Partial<MyTicketsFilters>;
+}
+
+export interface TemporaryPasswordState {
+  userId: string;
+  displayName: string;
+  temporaryPassword: string;
 }
 
 export interface TicketDialogState {

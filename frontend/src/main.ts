@@ -7,12 +7,17 @@ import { provideStore } from '@ngrx/store';
 import { provideStoreDevtools } from '@ngrx/store-devtools';
 
 import { AppComponent } from './app/app.component';
-import { authGuard } from './app/core/auth.guard';
+import { authGuard, passwordChangeGuard } from './app/core/auth.guard';
 import { authInterceptor } from './app/core/auth.interceptor';
 import { QueueEffects } from './app/state/queue.effects';
 import { queueReducer } from './app/state/queue.reducer';
 
 const routes: Routes = [
+  {
+    path: 'change-password',
+    canActivate: [passwordChangeGuard],
+    loadComponent: () => import('./app/pages/change-password/change-password-page.component').then((m) => m.ChangePasswordPageComponent)
+  },
   {
     path: 'login',
     loadComponent: () => import('./app/pages/login/login-page.component').then((m) => m.LoginPageComponent)

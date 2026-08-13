@@ -106,6 +106,40 @@ class AngularFrontendContractTest {
     }
 
     @Test
+    fun adminSubpagesAndUserManagementContractsArePresent() {
+        val sidebar = projectFile("frontend/src/app/shared/organisms/sidebar.component.ts")
+        val admin = projectFile("frontend/src/app/shared/organisms/admin-view.component.ts")
+        val users = projectFile("frontend/src/app/shared/organisms/admin-users-panel.component.ts")
+        val workspace = projectFile("frontend/src/app/pages/workspace/workspace-page.component.ts")
+        val models = projectFile("frontend/src/app/state/queue.models.ts")
+        val reducer = projectFile("frontend/src/app/state/queue.reducer.ts")
+        val selectors = projectFile("frontend/src/app/state/queue.selectors.ts")
+        val effects = projectFile("frontend/src/app/state/queue.effects.ts")
+        val changePassword = projectFile("frontend/src/app/pages/change-password/change-password-page.component.ts")
+
+        assertContains(models, "export type AdminPage")
+        assertContains(workspace, "adminPageFromParam")
+        assertContains(workspace, "params.get('admin')")
+        assertContains(reducer, "activeAdminPage")
+        assertContains(reducer, "data.currentUser.role !== 'ADMIN' ? 'board'")
+        assertContains(selectors, "queryParams['admin'] = adminPage")
+        assertContains(effects, "syncNonAdminFallback")
+        assertContains(sidebar, "admin-subnav")
+        assertContains(sidebar, "Project configuration")
+        assertContains(admin, "@case ('overview')")
+        assertContains(admin, "@case ('users')")
+        assertContains(admin, "@case ('projects')")
+        assertContains(admin, "@case ('configuration')")
+        assertContains(admin, "@case ('integrations')")
+        assertContains(admin, "@case ('trash')")
+        assertFalse("admin-grid" in admin)
+        assertContains(users, "Name or email")
+        assertContains(users, "Generate temporary password")
+        assertContains(users, "It will not be shown again")
+        assertContains(changePassword, "Validators.minLength(8)")
+    }
+
+    @Test
     fun ktorServesAngularSpaAssets() {
         val routes = projectFile("src/main/kotlin/de/ljunker/queuedos/api/ApiRoutes.kt")
 

@@ -54,7 +54,8 @@ private class JdbcUserRepository(
     override fun findActiveByEmail(email: String): User? =
         connection().queryOne(
             """
-            SELECT id, organization_id, email, display_name, role, active, password_salt, password_hash
+            SELECT id, organization_id, email, display_name, role, active, password_salt, password_hash,
+                   local_login_enabled, must_change_password
             FROM queuedos_users
             WHERE lower(email) = lower(?) AND active = true
             ORDER BY organization_id
@@ -66,7 +67,8 @@ private class JdbcUserRepository(
     override fun findByEmail(email: String): User? =
         connection().queryOne(
             """
-            SELECT id, organization_id, email, display_name, role, active, password_salt, password_hash
+            SELECT id, organization_id, email, display_name, role, active, password_salt, password_hash,
+                   local_login_enabled, must_change_password
             FROM queuedos_users
             WHERE lower(email) = lower(?)
             ORDER BY active DESC, organization_id
@@ -78,7 +80,8 @@ private class JdbcUserRepository(
     override fun findActiveById(userId: String): User? =
         connection().queryOne(
             """
-            SELECT id, organization_id, email, display_name, role, active, password_salt, password_hash
+            SELECT id, organization_id, email, display_name, role, active, password_salt, password_hash,
+                   local_login_enabled, must_change_password
             FROM queuedos_users
             WHERE id = ? AND active = true
             """.trimIndent(),
@@ -88,7 +91,8 @@ private class JdbcUserRepository(
     override fun findById(organizationId: String, userId: String): User? =
         connection().queryOne(
             """
-            SELECT id, organization_id, email, display_name, role, active, password_salt, password_hash
+            SELECT id, organization_id, email, display_name, role, active, password_salt, password_hash,
+                   local_login_enabled, must_change_password
             FROM queuedos_users
             WHERE organization_id = ? AND id = ?
             """.trimIndent(),
@@ -99,10 +103,11 @@ private class JdbcUserRepository(
     override fun listByOrganization(organizationId: String): List<User> =
         connection().query(
             """
-            SELECT id, organization_id, email, display_name, role, active, password_salt, password_hash
+            SELECT id, organization_id, email, display_name, role, active, password_salt, password_hash,
+                   local_login_enabled, must_change_password
             FROM queuedos_users
             WHERE organization_id = ?
-            ORDER BY email
+            ORDER BY lower(display_name), lower(email)
             """.trimIndent(),
             organizationId
         ) { user(it) }
@@ -118,8 +123,9 @@ private class JdbcUserRepository(
         connection().execute(
             """
             INSERT INTO queuedos_users
-                (id, organization_id, email, display_name, role, active, password_salt, password_hash)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (id, organization_id, email, display_name, role, active, password_salt, password_hash,
+                 local_login_enabled, must_change_password)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
             user.id,
             user.organizationId,
@@ -128,7 +134,9 @@ private class JdbcUserRepository(
             user.role.name,
             user.active,
             user.passwordSalt,
-            user.passwordHash
+            user.passwordHash,
+            user.localLoginEnabled,
+            user.mustChangePassword
         )
     }
 
@@ -136,8 +144,9 @@ private class JdbcUserRepository(
         connection().executeCount(
             """
             INSERT INTO queuedos_users
-                (id, organization_id, email, display_name, role, active, password_salt, password_hash)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (id, organization_id, email, display_name, role, active, password_salt, password_hash,
+                 local_login_enabled, must_change_password)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (organization_id, email) DO NOTHING
             """.trimIndent(),
             user.id,
@@ -147,14 +156,29 @@ private class JdbcUserRepository(
             user.role.name,
             user.active,
             user.passwordSalt,
-            user.passwordHash
+            user.passwordHash,
+            user.localLoginEnabled,
+            user.mustChangePassword
         ) == 1
+
+    override fun countActiveAdminsForUpdate(organizationId: String): Int =
+        connection().query(
+            """
+            SELECT id
+            FROM queuedos_users
+            WHERE organization_id = ? AND role = 'ADMIN' AND active = true
+            ORDER BY id
+            FOR UPDATE
+            """.trimIndent(),
+            organizationId
+        ) { it.getString("id") }.size
 
     override fun update(user: User) {
         connection().execute(
             """
             UPDATE queuedos_users
-            SET email = ?, display_name = ?, role = ?, active = ?, password_salt = ?, password_hash = ?
+            SET email = ?, display_name = ?, role = ?, active = ?, password_salt = ?, password_hash = ?,
+                local_login_enabled = ?, must_change_password = ?
             WHERE id = ? AND organization_id = ?
             """.trimIndent(),
             user.email,
@@ -163,6 +187,8 @@ private class JdbcUserRepository(
             user.active,
             user.passwordSalt,
             user.passwordHash,
+            user.localLoginEnabled,
+            user.mustChangePassword,
             user.id,
             user.organizationId
         )
@@ -1141,7 +1167,9 @@ private fun user(result: ResultSet): User =
         role = Role.valueOf(result.getString("role")),
         active = result.getBoolean("active"),
         passwordSalt = result.getString("password_salt"),
-        passwordHash = result.getString("password_hash")
+        passwordHash = result.getString("password_hash"),
+        localLoginEnabled = result.getBoolean("local_login_enabled"),
+        mustChangePassword = result.getBoolean("must_change_password")
     )
 
 private fun project(result: ResultSet): Project =

@@ -320,6 +320,60 @@ class ApiRoutesTest {
         assertEquals(5, bootstrap.workflows.single { it.projectId == legacyProject.id }.statuses.size)
     }
 
+    @Test
+    fun temporaryPasswordTokenCanOnlyChangePassword() = testApplication {
+        application { module(newStore()) }
+        val client = createClient { install(ClientContentNegotiation) { json(json) } }
+        val adminToken = login(client, "admin@queuedos.local", "admin")
+
+        val user = client.post("/api/users") {
+            auth(adminToken)
+            jsonBody(CreateUserRequest("api-user@example.com", "API User", Role.MEMBER, password = null))
+        }.body<UserResponse>()
+        assertEquals(false, user.localLoginEnabled)
+        assertEquals(false, user.mustChangePassword)
+        assertEquals(
+            HttpStatusCode.Unauthorized,
+            client.post("/api/auth/login") {
+                jsonBody(LoginRequest(user.email, "not-configured"))
+            }.status
+        )
+
+        val temporaryPassword = client.post("/api/users/${user.id}/temporary-password") {
+            auth(adminToken)
+        }.body<TemporaryPasswordResponse>().temporaryPassword
+        val pendingLogin = client.post("/api/auth/login") {
+            jsonBody(LoginRequest(user.email, temporaryPassword))
+        }.body<LoginResponse>()
+        assertTrue(pendingLogin.passwordChangeRequired)
+        assertTrue(pendingLogin.user.mustChangePassword)
+        assertEquals(
+            HttpStatusCode.Unauthorized,
+            client.get("/api/bootstrap") { auth(pendingLogin.token) }.status
+        )
+        assertEquals(
+            HttpStatusCode.Unauthorized,
+            client.post("/api/auth/change-password") {
+                auth(adminToken)
+                jsonBody(ChangePasswordRequest("cannot-use-session-token"))
+            }.status
+        )
+
+        val changed = client.post("/api/auth/change-password") {
+            auth(pendingLogin.token)
+            jsonBody(ChangePasswordRequest("replacement-password"))
+        }.body<LoginResponse>()
+        assertEquals(false, changed.passwordChangeRequired)
+        assertEquals(false, changed.user.mustChangePassword)
+        assertEquals(HttpStatusCode.OK, client.get("/api/bootstrap") { auth(changed.token) }.status)
+        assertEquals(
+            false,
+            client.post("/api/auth/login") {
+                jsonBody(LoginRequest(user.email, "replacement-password"))
+            }.body<LoginResponse>().passwordChangeRequired
+        )
+    }
+
     private suspend fun login(client: HttpClient, email: String, password: String): String =
         client.post("/api/auth/login") {
             jsonBody(LoginRequest(email, password))

@@ -351,6 +351,29 @@ tr:hover {
   color: var(--active-text);
 }
 
+.admin-subnav {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 6px 14px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+
+.admin-subtab {
+  min-height: 34px;
+  padding: 6px 10px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+}
+
+.admin-subtab.active {
+  border-color: var(--active-border);
+  background: var(--active-bg);
+  color: var(--active-text);
+}
+
 .sidebar-footer {
   display: grid;
   gap: 10px;
@@ -641,6 +664,139 @@ qd-workspace-tab-host {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+}
+
+.admin-overview,
+.admin-configuration,
+.admin-users-page {
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-configuration {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-configuration > qd-admin-ticket-types-panel,
+.admin-configuration > qd-admin-workflow-panel,
+qd-admin-projects-panel,
+qd-admin-activity-hooks-panel,
+qd-admin-deleted-tickets-panel,
+qd-admin-users-panel {
+  display: block;
+  min-width: 0;
+}
+
+.admin-metrics .metric {
+  cursor: pointer;
+  text-align: left;
+}
+
+.admin-shortcuts {
+  margin-top: 4px;
+}
+
+.quick-link-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.user-filters {
+  display: grid;
+  grid-template-columns: minmax(220px, 2fr) minmax(150px, 1fr) minmax(150px, 1fr);
+  gap: 10px;
+}
+
+.user-table-wrap table {
+  min-width: 980px;
+}
+
+.status-pill {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--low-bg);
+  color: var(--success);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.status-pill.inactive {
+  background: var(--surface-3);
+  color: var(--muted);
+}
+
+.empty-row,
+.empty-row:hover {
+  cursor: default;
+  background: transparent;
+}
+
+.empty-row td {
+  color: var(--muted);
+  text-align: center;
+}
+
+.user-dialog {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.checkbox-row input {
+  width: 18px;
+  min-height: 18px;
+  margin-top: 1px;
+}
+
+.checkbox-row span,
+.checkbox-row small,
+.user-password-action small {
+  display: block;
+}
+
+.checkbox-row small,
+.user-password-action small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.user-password-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.temporary-password-dialog {
+  width: min(580px, calc(100vw - 32px));
+}
+
+.temporary-password-value {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-3);
+}
+
+.temporary-password-value code {
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .admin-grid > qd-admin-workflow-panel {
@@ -1288,6 +1444,23 @@ qd-workspace-tab-host {
     gap: 8px;
     overflow-x: auto;
     padding-bottom: 4px;
+    flex-wrap: wrap;
+  }
+
+  .admin-subnav {
+    flex: 0 0 100%;
+    display: flex;
+    gap: 6px;
+    margin: 0;
+    padding: 4px 0 0;
+    overflow-x: auto;
+    border: 0;
+  }
+
+  .admin-subtab {
+    flex: 0 0 auto;
+    min-height: 38px;
+    text-align: center;
   }
 
   .tab {
@@ -1310,7 +1483,11 @@ qd-workspace-tab-host {
   .bulk-bar,
   .admin-grid,
   .workflow-editor,
-  .detail-grid {
+    .detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .user-filters {
     grid-template-columns: 1fr;
   }
 
@@ -1479,6 +1656,11 @@ qd-workspace-tab-host {
 
   .dialog-body footer,
   .dialog-body footer.wizard-footer {
+    grid-template-columns: 1fr;
+  }
+
+  .user-password-action,
+  .temporary-password-value {
     grid-template-columns: 1fr;
   }
 

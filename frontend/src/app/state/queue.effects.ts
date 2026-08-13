@@ -8,6 +8,7 @@ import {catchError, concatMap, debounceTime, filter, map, of, switchMap, tap, wi
 import {ApiClientService} from '../core/api-client.service';
 import {AuthTokenService} from '../core/auth-token.service';
 import {ThemeService} from '../core/theme.service';
+import {TemporaryPasswordService} from '../core/temporary-password.service';
 import {QueueActions} from './queue.actions';
 import {selectDetailTicketId, selectTheme, selectUrlQueryParams} from './queue.selectors';
 
@@ -19,11 +20,12 @@ export class QueueEffects {
   private readonly router = inject(Router);
   private readonly store = inject(Store);
   private readonly theme = inject(ThemeService);
+  private readonly temporaryPasswords = inject(TemporaryPasswordService);
 
   readonly appStarted$ = createEffect(() =>
     this.actions$.pipe(
       ofType(QueueActions.appStarted),
-      filter(({ token }) => Boolean(token)),
+      filter(({ token, passwordChangeRequired }) => Boolean(token) && !passwordChangeRequired),
       map(() => QueueActions.bootstrapRequested())
     )
   );
@@ -33,7 +35,7 @@ export class QueueEffects {
       ofType(QueueActions.loginRequested),
       concatMap(({ request }) =>
         this.api.login(request).pipe(
-          tap((response) => this.auth.set(response.token)),
+          tap((response) => this.auth.set(response.token, response.passwordChangeRequired)),
           map((response) => QueueActions.loginSucceeded(response)),
           catchError((error: unknown) => of(QueueActions.loginFailed({ error: errorMessage(error, 'Sign in failed.') })))
         )
@@ -44,8 +46,10 @@ export class QueueEffects {
   readonly loginSucceeded$ = createEffect(() =>
     this.actions$.pipe(
       ofType(QueueActions.loginSucceeded),
-      tap(() => void this.router.navigateByUrl('/')),
-      map(() => QueueActions.bootstrapRequested())
+      concatMap(({passwordChangeRequired}) => {
+        void this.router.navigateByUrl(passwordChangeRequired ? '/change-password' : '/');
+        return passwordChangeRequired ? [] : [QueueActions.bootstrapRequested()];
+      })
     )
   );
 
@@ -77,6 +81,19 @@ export class QueueEffects {
         )
       )
     )
+  );
+
+  readonly syncNonAdminFallback$ = createEffect(
+    () => this.actions$.pipe(
+      ofType(QueueActions.bootstrapSucceeded),
+      filter(({data}) => data.currentUser.role !== 'ADMIN'),
+      debounceTime(0),
+      withLatestFrom(this.store.select(selectUrlQueryParams)),
+      tap(([, queryParams]) => {
+        void this.router.navigate([], {queryParams, replaceUrl: true});
+      })
+    ),
+    {dispatch: false}
   );
 
   readonly ticketDialogSaved$ = createEffect(() =>
@@ -319,9 +336,24 @@ export class QueueEffects {
   readonly createUser$ = createEffect(() =>
     this.actions$.pipe(
       ofType(QueueActions.userCreateRequested),
-      concatMap(({ request }) =>
+      concatMap(({ request, generateTemporaryPassword }) =>
         this.api.createUser(request).pipe(
-          map(() => QueueActions.mutationSucceeded({})),
+          switchMap((user) => generateTemporaryPassword
+            ? this.api.generateTemporaryPassword(user.id).pipe(
+                tap(({temporaryPassword}) => this.temporaryPasswords.show({
+                  userId: user.id,
+                  displayName: user.displayName,
+                  temporaryPassword
+                })),
+                map(() => QueueActions.userTemporaryPasswordGenerated()),
+                catchError((error: unknown) => of(
+                  QueueActions.mutationFailed({
+                    error: errorMessage(error, 'User was created, but the temporary password could not be generated.')
+                  }),
+                  QueueActions.bootstrapRequested()
+                ))
+              )
+            : of(QueueActions.mutationSucceeded({message: 'User created.'}))),
           catchError((error: unknown) => of(QueueActions.mutationFailed({ error: errorMessage(error, 'User could not be created.') })))
         )
       )
@@ -337,6 +369,30 @@ export class QueueEffects {
           catchError((error: unknown) => of(QueueActions.mutationFailed({ error: errorMessage(error, 'User could not be updated.') })))
         )
       )
+    )
+  );
+
+  readonly generateTemporaryPassword$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.userTemporaryPasswordRequested),
+      concatMap(({user}) => this.api.generateTemporaryPassword(user.id).pipe(
+        tap(({temporaryPassword}) => this.temporaryPasswords.show({
+          userId: user.id,
+          displayName: user.displayName,
+          temporaryPassword
+        })),
+        map(() => QueueActions.userTemporaryPasswordGenerated()),
+        catchError((error: unknown) => of(QueueActions.mutationFailed({
+          error: errorMessage(error, 'Temporary password could not be generated.')
+        })))
+      ))
+    )
+  );
+
+  readonly reloadAfterTemporaryPassword$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.userTemporaryPasswordGenerated),
+      map(() => QueueActions.bootstrapRequested())
     )
   );
 
@@ -519,6 +575,7 @@ export class QueueEffects {
           QueueActions.projectSelected,
             QueueActions.projectDeleted,
           QueueActions.tabSelected,
+          QueueActions.adminPageSelected,
           QueueActions.ticketDetailOpened,
           QueueActions.detailClosed,
           QueueActions.savedTicketFilterApplied

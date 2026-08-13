@@ -26,7 +26,8 @@ class QueueDosServices(
 
 data class AuthenticatedUser(
     val token: String,
-    val user: User
+    val user: User,
+    val passwordChangeRequired: Boolean = false
 )
 
 class AuthenticationService(
@@ -39,6 +40,9 @@ class AuthenticationService(
             val email = command.email.trim().lowercase(Locale.ROOT)
             val user = repositories.users.findActiveByEmail(email)
                 ?: throw UnauthorizedFailure("Invalid email or password.")
+            if (!user.localLoginEnabled) {
+                throw UnauthorizedFailure("Invalid email or password.")
+            }
             if (!verifyPassword(command.password, user.passwordSalt, user.passwordHash)) {
                 throw UnauthorizedFailure("Invalid email or password.")
             }
@@ -48,7 +52,15 @@ class AuthenticationService(
             } else {
                 user
             }
-            AuthenticatedUser(tokenCodec.createToken(authenticatedUser.id), authenticatedUser)
+            if (authenticatedUser.mustChangePassword) {
+                AuthenticatedUser(
+                    tokenCodec.createPasswordChangeToken(authenticatedUser.id),
+                    authenticatedUser,
+                    passwordChangeRequired = true
+                )
+            } else {
+                AuthenticatedUser(tokenCodec.createToken(authenticatedUser.id), authenticatedUser)
+            }
         }
 
     fun loginMicrosoft(userInfo: MicrosoftUserInfo, allowedDomains: Set<String>): AuthenticatedUser =
@@ -79,7 +91,9 @@ class AuthenticationService(
                 role = Role.MEMBER,
                 active = true,
                 passwordSalt = BCRYPT_PASSWORD_MARKER,
-                passwordHash = hashPassword(oauthSecret())
+                passwordHash = hashPassword(oauthSecret()),
+                localLoginEnabled = false,
+                mustChangePassword = false
             )
             val user = if (repositories.users.insertIfEmailAbsent(candidate)) {
                 candidate
@@ -93,6 +107,27 @@ class AuthenticationService(
     fun userByToken(token: String): User? =
         transactions.inTransaction {
             tokenCodec.userIdFromToken(token)?.let(repositories.users::findActiveById)
+        }
+
+    fun userByPasswordChangeToken(token: String): User? =
+        transactions.inTransaction {
+            tokenCodec.passwordChangeUserIdFromToken(token)
+                ?.let(repositories.users::findActiveById)
+                ?.takeIf { it.localLoginEnabled && it.mustChangePassword }
+        }
+
+    fun changePassword(actor: User, newPassword: String): AuthenticatedUser =
+        transactions.inTransaction {
+            val current = repositories.users.findActiveById(actor.id)
+                ?.takeIf { it.localLoginEnabled && it.mustChangePassword }
+                ?: throw UnauthorizedFailure("Password change is no longer available.")
+            val updated = current.copy(
+                passwordSalt = BCRYPT_PASSWORD_MARKER,
+                passwordHash = hashPassword(requirePassword(newPassword)),
+                localLoginEnabled = true,
+                mustChangePassword = false
+            ).also(repositories.users::update)
+            AuthenticatedUser(tokenCodec.createToken(updated.id), updated)
         }
 }
 
@@ -350,6 +385,7 @@ class UserService(
             if (repositories.users.emailExists(actor.organizationId, email)) {
                 throw ConflictFailure("A user with this email already exists.")
             }
+            val password = command.password?.let(::requirePassword)
             User(
                 id = id("user"),
                 organizationId = actor.organizationId,
@@ -358,7 +394,9 @@ class UserService(
                 role = command.role,
                 active = true,
                 passwordSalt = BCRYPT_PASSWORD_MARKER,
-                passwordHash = hashPassword(requirePassword(command.password))
+                passwordHash = hashPassword(password ?: oauthSecret()),
+                localLoginEnabled = password != null,
+                mustChangePassword = false
             ).also(repositories.users::insert)
         }
 
@@ -367,19 +405,42 @@ class UserService(
             AuthorizationPolicies.requireAdmin(actor)
             val current = repositories.users.findById(actor.organizationId, userId)
                 ?: throw NotFoundFailure("User not found.")
-            if (current.id == actor.id && command.active == false) {
-                throw ConflictFailure("You cannot deactivate your own account.")
+            val nextRole = command.role ?: current.role
+            val nextActive = command.active ?: current.active
+            if (current.id == actor.id && (!nextActive || nextRole != Role.ADMIN)) {
+                throw ConflictFailure("You cannot deactivate or remove admin access from your own account.")
+            }
+            val activeAdminCount = repositories.users.countActiveAdminsForUpdate(actor.organizationId)
+            if (current.active && current.role == Role.ADMIN && (!nextActive || nextRole != Role.ADMIN) && activeAdminCount <= 1) {
+                throw ConflictFailure("The last active admin cannot be deactivated or changed to member.")
             }
             val passwordHash = command.password?.takeIf { it.isNotBlank() }?.let {
                 BCRYPT_PASSWORD_MARKER to hashPassword(requirePassword(it))
             }
             current.copy(
                 displayName = command.displayName?.let { requireName(it, "Display name") } ?: current.displayName,
-                role = command.role ?: current.role,
-                active = command.active ?: current.active,
+                role = nextRole,
+                active = nextActive,
                 passwordSalt = passwordHash?.first ?: current.passwordSalt,
-                passwordHash = passwordHash?.second ?: current.passwordHash
+                passwordHash = passwordHash?.second ?: current.passwordHash,
+                localLoginEnabled = if (passwordHash != null) true else current.localLoginEnabled,
+                mustChangePassword = if (passwordHash != null) false else current.mustChangePassword
             ).also(repositories.users::update)
+        }
+
+    fun generateTemporaryPassword(actor: User, userId: String): String =
+        transactions.inTransaction {
+            AuthorizationPolicies.requireAdmin(actor)
+            val current = repositories.users.findById(actor.organizationId, userId)
+                ?: throw NotFoundFailure("User not found.")
+            val temporaryPassword = oauthSecret().take(24)
+            current.copy(
+                passwordSalt = BCRYPT_PASSWORD_MARKER,
+                passwordHash = hashPassword(temporaryPassword),
+                localLoginEnabled = true,
+                mustChangePassword = true
+            ).also(repositories.users::update)
+            temporaryPassword
         }
 }
 

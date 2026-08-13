@@ -5,6 +5,7 @@ import {
   AuthConfigResponse,
   BootstrapResponse,
   BulkUpdateTicketsRequest,
+  ChangePasswordRequest,
   CreateActivityHookRequest,
   CreateProjectRequest,
   CreateSavedTicketFilterRequest,
@@ -15,6 +16,7 @@ import {
   LoginRequest,
   LoginResponse,
   Project,
+  PublicUser,
   SaveWorkflowRequest,
   Ticket,
   TicketComment,
@@ -22,6 +24,7 @@ import {
   TicketRevisionDetail,
   TicketRevisionPage,
   TicketType,
+  TemporaryPasswordResponse,
   TransitionTicketRequest,
   UpdateActivityHookRequest,
   UpdateProjectRequest,
@@ -37,6 +40,10 @@ export class ApiClientService {
 
   login(request: LoginRequest) {
     return this.http.post<LoginResponse>('/api/auth/login', request);
+  }
+
+  changePassword(request: ChangePasswordRequest) {
+    return this.http.post<LoginResponse>('/api/auth/change-password', request);
   }
 
   authConfig() {
@@ -109,11 +116,15 @@ export class ApiClientService {
   }
 
   createUser(request: CreateUserRequest) {
-    return this.http.post('/api/users', request);
+    return this.http.post<PublicUser>('/api/users', request);
   }
 
   updateUser(id: string, request: UpdateUserRequest) {
-    return this.http.put(`/api/users/${id}`, request);
+    return this.http.put<PublicUser>(`/api/users/${id}`, request);
+  }
+
+  generateTemporaryPassword(id: string) {
+    return this.http.post<TemporaryPasswordResponse>(`/api/users/${id}/temporary-password`, {});
   }
 
   createTicketType(request: CreateTicketTypeRequest) {

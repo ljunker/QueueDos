@@ -47,19 +47,32 @@ class AuthTokenCodec(
         require(secret.isNotBlank()) { "Session secret must not be blank." }
     }
 
-    fun createToken(userId: String): String {
+    fun createToken(userId: String): String =
+        createToken(userId, AuthTokenScope.SESSION, ttl)
+
+    fun createPasswordChangeToken(userId: String): String =
+        createToken(userId, AuthTokenScope.PASSWORD_CHANGE, Duration.ofMinutes(15))
+
+    private fun createToken(userId: String, scope: AuthTokenScope, tokenTtl: Duration): String {
         val now = clock.instant().epochSecond
         val header = JwtHeader()
         val payload = JwtPayload(
             subject = userId,
             issuedAt = now,
-            expiresAt = now + ttl.seconds
+            expiresAt = now + tokenTtl.seconds,
+            scope = scope
         )
         val unsigned = "${encode(json.encodeToString(header))}.${encode(json.encodeToString(payload))}"
         return "$unsigned.${signature(unsigned)}"
     }
 
-    fun userIdFromToken(token: String): String? {
+    fun userIdFromToken(token: String): String? =
+        userIdFromToken(token, AuthTokenScope.SESSION)
+
+    fun passwordChangeUserIdFromToken(token: String): String? =
+        userIdFromToken(token, AuthTokenScope.PASSWORD_CHANGE)
+
+    private fun userIdFromToken(token: String, requiredScope: AuthTokenScope): String? {
         val parts = token.split(".")
         if (parts.size != 3) return null
 
@@ -72,6 +85,7 @@ class AuthTokenCodec(
 
             val payload = json.decodeFromString<JwtPayload>(decode(parts[1]))
             if (payload.expiresAt < clock.instant().epochSecond) return null
+            if (payload.scope != requiredScope) return null
             payload.subject
         }.getOrNull()
     }
@@ -94,6 +108,12 @@ class AuthTokenCodec(
 }
 
 @Serializable
+enum class AuthTokenScope {
+    SESSION,
+    PASSWORD_CHANGE
+}
+
+@Serializable
 private data class JwtHeader(
     @kotlinx.serialization.SerialName("alg")
     val algorithm: String = "HS256",
@@ -108,5 +128,7 @@ private data class JwtPayload(
     @kotlinx.serialization.SerialName("iat")
     val issuedAt: Long,
     @kotlinx.serialization.SerialName("exp")
-    val expiresAt: Long
+    val expiresAt: Long,
+    @kotlinx.serialization.SerialName("scp")
+    val scope: AuthTokenScope = AuthTokenScope.SESSION
 )
