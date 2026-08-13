@@ -10,6 +10,12 @@ import {
   SavedTicketFilterView,
   Ticket
 } from '../../core/api.models';
+import {ToastComponent} from '../../shared/atoms/toast.component';
+import {ProjectWizardComponent} from '../../shared/organisms/project-wizard.component';
+import {SidebarComponent} from '../../shared/organisms/sidebar.component';
+import {TicketDialogComponent} from '../../shared/organisms/ticket-dialog.component';
+import {WorkspaceTabHostComponent} from '../../shared/organisms/workspace-tab-host.component';
+import {WorkspaceToolbarComponent} from '../../shared/organisms/workspace-toolbar.component';
 import {QueueActions} from '../../state/queue.actions';
 import {
   selectActiveTab,
@@ -67,7 +73,14 @@ import {
 @Component({
   selector: 'qd-workspace-page',
   standalone: true,
-  imports: [],
+  imports: [
+    ProjectWizardComponent,
+    SidebarComponent,
+    TicketDialogComponent,
+    ToastComponent,
+    WorkspaceTabHostComponent,
+    WorkspaceToolbarComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (loading() && !data()) {

@@ -6,6 +6,7 @@ import de.ljunker.queuedos.api.configureStatusPages
 import de.ljunker.queuedos.application.BadRequestFailure
 import de.ljunker.queuedos.application.MicrosoftSsoSettings
 import de.ljunker.queuedos.application.QueueDosBackend
+import de.ljunker.queuedos.application.parseMicrosoftAllowedDomains
 import de.ljunker.queuedos.config.appJson
 import de.ljunker.queuedos.persistence.DriverManagerDataSource
 import de.ljunker.queuedos.security.AuthTokenCodec
@@ -61,6 +62,9 @@ private fun microsoftSsoSettings(): MicrosoftSsoSettings? {
         clientSecret = clientSecret,
         redirectUri = System.getenv("QUEUEDOS_MICROSOFT_REDIRECT_URI")?.takeIf { it.isNotBlank() }
             ?: "$publicBaseUrl/api/auth/microsoft/callback",
-        tenant = System.getenv("QUEUEDOS_MICROSOFT_TENANT")?.takeIf { it.isNotBlank() } ?: "common"
+        tenant = System.getenv("QUEUEDOS_MICROSOFT_TENANT")?.takeIf { it.isNotBlank() } ?: "common",
+        allowedDomains = parseMicrosoftAllowedDomains(
+            System.getenv("QUEUEDOS_MICROSOFT_ALLOWED_DOMAINS")
+        )
     )
 }

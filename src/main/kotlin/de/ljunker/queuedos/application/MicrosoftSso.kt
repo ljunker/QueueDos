@@ -18,7 +18,8 @@ data class MicrosoftSsoSettings(
     val clientId: String,
     val clientSecret: String,
     val redirectUri: String,
-    val tenant: String = "common"
+    val tenant: String = "common",
+    val allowedDomains: Set<String> = emptySet()
 )
 
 data class MicrosoftUserInfo(
@@ -36,16 +37,24 @@ class MicrosoftSsoService(
     private val identityClient: MicrosoftIdentityClient?,
     private val authentication: AuthenticationService
 ) {
-    val enabled: Boolean = settings != null && identityClient != null
+    val enabled: Boolean = settings != null && identityClient != null && settings.allowedDomains.isNotEmpty()
 
     fun authorizationUrl(state: String, codeChallenge: String): String =
         client().authorizationUrl(state, codeChallenge)
 
-    fun login(code: String, codeVerifier: String): AuthenticatedUser =
-        authentication.loginMicrosoft(client().userInfo(code, codeVerifier).email)
+    fun login(code: String, codeVerifier: String): AuthenticatedUser {
+        val configuration = settings()
+        return authentication.loginMicrosoft(
+            client().userInfo(code, codeVerifier),
+            configuration.allowedDomains
+        )
+    }
 
     private fun client(): MicrosoftIdentityClient =
-        identityClient ?: throw NotFoundFailure("Microsoft sign-in is not configured.")
+        if (enabled) identityClient!! else throw NotFoundFailure("Microsoft sign-in is not configured.")
+
+    private fun settings(): MicrosoftSsoSettings =
+        if (enabled) settings!! else throw NotFoundFailure("Microsoft sign-in is not configured.")
 }
 
 class JdkMicrosoftIdentityClient(
@@ -130,6 +139,27 @@ fun oauthSecret(): String {
 fun pkceChallenge(verifier: String): String =
     Base64.getUrlEncoder().withoutPadding()
         .encodeToString(MessageDigest.getInstance("SHA-256").digest(verifier.toByteArray(StandardCharsets.US_ASCII)))
+
+internal fun parseMicrosoftAllowedDomains(value: String?): Set<String> {
+    if (value.isNullOrBlank()) return emptySet()
+    val domains = value.split(',').map { it.trim().lowercase(Locale.ROOT) }
+    if (domains.any { !isValidEmailDomain(it) }) {
+        throw BadRequestFailure(
+            "QUEUEDOS_MICROSOFT_ALLOWED_DOMAINS must contain comma-separated email domains."
+        )
+    }
+    return domains.toSet()
+}
+
+private fun isValidEmailDomain(domain: String): Boolean {
+    if (domain.length !in 3..253 || '.' !in domain) return false
+    return domain.split('.').all { label ->
+        label.length in 1..63 &&
+                label.first().isLetterOrDigit() &&
+                label.last().isLetterOrDigit() &&
+                label.all { it.isLetterOrDigit() || it == '-' }
+    }
+}
 
 private fun form(vararg values: Pair<String, String>): String =
     values.joinToString("&") { (key, value) -> "${encode(key)}=${encode(value)}" }

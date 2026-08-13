@@ -5,8 +5,11 @@ import de.ljunker.queuedos.security.AuthTokenCodec
 import de.ljunker.queuedos.security.BCRYPT_PASSWORD_MARKER
 import de.ljunker.queuedos.security.legacySha256Hash
 import de.ljunker.queuedos.support.PostgresTestBackend
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
@@ -546,7 +549,12 @@ class QueueDosServicesTest {
             PostgresTestBackend.freshDataSource(),
             de.ljunker.queuedos.config.appJson,
             AuthTokenCodec("microsoft-test-secret-that-is-long-enough"),
-            microsoftSsoSettings = MicrosoftSsoSettings("client", "secret", "http://localhost/callback"),
+            microsoftSsoSettings = MicrosoftSsoSettings(
+                "client",
+                "secret",
+                "http://localhost/callback",
+                allowedDomains = setOf("queuedos.local")
+            ),
             microsoftIdentityClient = object : MicrosoftIdentityClient {
                 override fun authorizationUrl(state: String, codeChallenge: String): String =
                     "https://login.example/$state"
@@ -560,6 +568,162 @@ class QueueDosServicesTest {
 
         assertEquals("user-member", authenticated.user.id)
     }
+
+    @Test
+    fun microsoftSsoCreatesUnknownMembersAndReusesTheirAccount() {
+        val backend = microsoftBackend(MicrosoftUserInfo(" New.User@Example.com ", "  New User  "))
+
+        val first = backend.services.microsoftSso.login("code", "verifier")
+        val second = backend.services.microsoftSso.login("code", "verifier")
+
+        assertEquals(first.user.id, second.user.id)
+        assertEquals("org-default", first.user.organizationId)
+        assertEquals("new.user@example.com", first.user.email)
+        assertEquals("New User", first.user.displayName)
+        assertEquals(Role.MEMBER, first.user.role)
+        assertTrue(first.user.active)
+        assertEquals(first.user.id, backend.services.auth.userByToken(first.token)?.id)
+        val users = backend.services.queries.bootstrap(admin(backend.services)).users
+        assertEquals(1, users.count { it.email == "new.user@example.com" })
+    }
+
+    @Test
+    fun concurrentMicrosoftLoginsCreateOnlyOneAccount() {
+        val backend = microsoftBackend(MicrosoftUserInfo("parallel@example.com", "Parallel User"))
+        val executor = Executors.newFixedThreadPool(2)
+
+        val users = try {
+            executor.invokeAll(
+                listOf(
+                    Callable { backend.services.microsoftSso.login("first", "verifier").user },
+                    Callable { backend.services.microsoftSso.login("second", "verifier").user }
+                )
+            ).map { it.get() }
+        } finally {
+            executor.shutdownNow()
+        }
+
+        assertEquals(1, users.map(User::id).distinct().size)
+        val storedUsers = backend.services.queries.bootstrap(admin(backend.services)).users
+        assertEquals(1, storedUsers.count { it.email == "parallel@example.com" })
+    }
+
+    @Test
+    fun microsoftDomainAllowlistAppliesToExistingAndUnknownUsersExactly() {
+        val services = newServices()
+
+        assertFailsWith<UnauthorizedFailure> {
+            services.auth.loginMicrosoft(
+                MicrosoftUserInfo("member@queuedos.local", "Existing Member"),
+                setOf("example.com")
+            )
+        }
+        assertFailsWith<UnauthorizedFailure> {
+            services.auth.loginMicrosoft(
+                MicrosoftUserInfo("unknown@team.example.com", "Unknown Member"),
+                setOf("example.com")
+            )
+        }
+
+        assertTrue(services.queries.bootstrap(admin(services)).users.none { it.email == "unknown@team.example.com" })
+    }
+
+    @Test
+    fun microsoftLoginDoesNotReactivateInactiveUsers() {
+        val fixture = PostgresTestBackend.create()
+        fixture.sql {
+            prepareStatement("UPDATE queuedos_users SET active = false WHERE email = ?").use {
+                it.setString(1, "member@queuedos.local")
+                it.executeUpdate()
+            }
+        }
+
+        assertFailsWith<UnauthorizedFailure> {
+            fixture.backend.services.auth.loginMicrosoft(
+                MicrosoftUserInfo("member@queuedos.local", "QueueDos Member"),
+                setOf("queuedos.local")
+            )
+        }
+
+        val users = fixture.backend.services.queries.bootstrap(admin(fixture.backend.services)).users
+        assertFalse(users.single { it.email == "member@queuedos.local" }.active)
+    }
+
+    @Test
+    fun microsoftLoginFallsBackToEmailPrefixForMissingDisplayName() {
+        val services = newServices()
+
+        val authenticated = services.auth.loginMicrosoft(
+            MicrosoftUserInfo("fallback@example.com", "   "),
+            setOf("example.com")
+        )
+
+        assertEquals("fallback", authenticated.user.displayName)
+    }
+
+    @Test
+    fun microsoftLoginReportsMissingDefaultOrganization() {
+        val fixture = PostgresTestBackend.create()
+        fixture.sql {
+            createStatement().use { it.executeUpdate("DELETE FROM queuedos_organizations") }
+        }
+
+        val failure = assertFailsWith<BadRequestFailure> {
+            fixture.backend.services.auth.loginMicrosoft(
+                MicrosoftUserInfo("new@example.com", "New User"),
+                setOf("example.com")
+            )
+        }
+
+        assertTrue(failure.message.orEmpty().contains("org-default"))
+    }
+
+    @Test
+    fun microsoftSsoIsDisabledWithoutAllowedDomains() {
+        val backend = microsoftBackend(
+            MicrosoftUserInfo("new@example.com", "New User"),
+            allowedDomains = emptySet()
+        )
+
+        assertFalse(backend.services.microsoftSso.enabled)
+        assertFailsWith<NotFoundFailure> {
+            backend.services.microsoftSso.authorizationUrl("state", "challenge")
+        }
+    }
+
+    @Test
+    fun microsoftAllowedDomainsAreNormalizedAndValidated() {
+        assertEquals(
+            setOf("example.com", "example.org"),
+            parseMicrosoftAllowedDomains(" Example.com,EXAMPLE.ORG ")
+        )
+        assertTrue(parseMicrosoftAllowedDomains(null).isEmpty())
+        assertTrue(parseMicrosoftAllowedDomains("  ").isEmpty())
+        assertFailsWith<BadRequestFailure> {
+            parseMicrosoftAllowedDomains("example.com,not a domain")
+        }
+    }
+
+    private fun microsoftBackend(
+        userInfo: MicrosoftUserInfo,
+        allowedDomains: Set<String> = setOf("example.com")
+    ): QueueDosBackend = QueueDosBackend.create(
+        PostgresTestBackend.freshDataSource(),
+        de.ljunker.queuedos.config.appJson,
+        AuthTokenCodec("microsoft-test-secret-that-is-long-enough"),
+        microsoftSsoSettings = MicrosoftSsoSettings(
+            "client",
+            "secret",
+            "http://localhost/callback",
+            allowedDomains = allowedDomains
+        ),
+        microsoftIdentityClient = object : MicrosoftIdentityClient {
+            override fun authorizationUrl(state: String, codeChallenge: String): String =
+                "https://login.example/$state"
+
+            override fun userInfo(code: String, codeVerifier: String): MicrosoftUserInfo = userInfo
+        }
+    )
 
     private fun newServices(): QueueDosServices = PostgresTestBackend.create().backend.services
 

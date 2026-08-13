@@ -10,11 +10,13 @@ interface OrganizationRepository {
 
 interface UserRepository {
     fun findActiveByEmail(email: String): User?
+    fun findByEmail(email: String): User?
     fun findActiveById(userId: String): User?
     fun findById(organizationId: String, userId: String): User?
     fun listByOrganization(organizationId: String): List<User>
     fun emailExists(organizationId: String, email: String): Boolean
     fun insert(user: User)
+    fun insertIfEmailAbsent(user: User): Boolean
     fun update(user: User)
 }
 

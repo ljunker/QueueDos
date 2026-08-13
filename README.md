@@ -17,7 +17,7 @@ Vordefinierte Nutzer:
 
 ## MVP-Umfang
 
-- Anmeldung mit E-Mail/Passwort oder optionalem Microsoft-SSO für vorhandene aktive Nutzer.
+- Anmeldung mit E-Mail/Passwort oder optionalem Microsoft-SSO mit automatischer Benutzeranlage.
 - Eine sichtbare Organisation mit mehreren Projekten.
 - Projektbezogene Ticketschlüssel wie `QDOS-1`.
 - Konfigurierbare Tickettypen.
@@ -45,16 +45,21 @@ Wichtige Umgebungsvariablen:
 - `QUEUEDOS_PUBLIC_BASE_URL`: öffentliche Basis-URL für Microsoft-SSO-Redirects, z. B. `http://localhost:8080`.
 - `QUEUEDOS_MICROSOFT_CLIENT_ID` / `QUEUEDOS_MICROSOFT_CLIENT_SECRET`: aktivieren Microsoft-SSO.
 - `QUEUEDOS_MICROSOFT_TENANT`: Entra-Tenant für Microsoft-SSO, Standard `common`.
+- `QUEUEDOS_MICROSOFT_ALLOWED_DOMAINS`: kommaseparierte Liste erlaubter E-Mail-Domains für Microsoft-SSO, z. B.
+  `example.com,example.org`. Die Prüfung ist nicht case-sensitiv, gilt bei jedem Microsoft-Login und erlaubt nur exakte
+  Treffer; Unterdomains müssen separat eingetragen werden. Ohne mindestens eine erlaubte Domain bleibt Microsoft-SSO
+  deaktiviert.
 - `QUEUEDOS_MICROSOFT_REDIRECT_URI`: optionaler expliziter Microsoft-Callback-Redirect; Standard ist
   `${QUEUEDOS_PUBLIC_BASE_URL}/api/auth/microsoft/callback`.
 
 Ohne `QUEUEDOS_DATABASE_URL` startet die Anwendung nicht. Bestehende Daten aus dem früheren PostgreSQL-Snapshot
 `queuedos_state` werden beim ersten Flyway-Lauf in die relationalen Tabellen migriert.
 
-Microsoft-SSO verknüpft keine neuen QueueDos-Nutzer automatisch. Die von Microsoft gelieferte E-Mail muss einem
-aktiven Nutzer in QueueDos entsprechen. Slack-Hooks werden im Admin-Bereich pro Activity-Ereignis konfiguriert; eine
-Vorlage kann Platzhalter wie `{{actorName}}`, `{{ticketKey}}`, `{{ticketTitle}}`, `{{comment}}`,
-`{{fromStatusId}}` oder `{{toStatusId}}` verwenden.
+Microsoft-SSO meldet vorhandene aktive QueueDos-Nutzer anhand ihrer E-Mail an. Wenn die von Microsoft gelieferte
+E-Mail noch keinem QueueDos-Nutzer gehört und ihre Domain freigegeben ist, wird automatisch ein aktives Mitglied in
+der Standardorganisation angelegt. Inaktive Nutzer werden nicht reaktiviert. Slack-Hooks werden im Admin-Bereich pro
+Activity-Ereignis konfiguriert; eine Vorlage kann Platzhalter wie `{{actorName}}`, `{{ticketKey}}`, `{{ticketTitle}}`,
+`{{comment}}`, `{{fromStatusId}}` oder `{{toStatusId}}` verwenden.
 
 ## Zustandsprüfung
 

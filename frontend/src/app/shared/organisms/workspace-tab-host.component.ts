@@ -33,11 +33,24 @@ import {
   WorkflowTransitionPatch,
   WorkspaceTab
 } from '../../state/queue.models';
+import {AdminViewComponent} from './admin-view.component';
+import {BoardViewComponent} from './board-view.component';
+import {MyTicketsViewComponent} from './my-tickets-view.component';
+import {ProjectDashboardViewComponent} from './project-dashboard-view.component';
+import {TicketDetailViewComponent} from './ticket-detail-view.component';
+import {TicketListViewComponent} from './ticket-list-view.component';
 
 @Component({
   selector: 'qd-workspace-tab-host',
   standalone: true,
-  imports: [],
+  imports: [
+    AdminViewComponent,
+    BoardViewComponent,
+    MyTicketsViewComponent,
+    ProjectDashboardViewComponent,
+    TicketDetailViewComponent,
+    TicketListViewComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="tab-panel">

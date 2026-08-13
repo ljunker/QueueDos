@@ -63,6 +63,18 @@ private class JdbcUserRepository(
             email
         ) { user(it) }
 
+    override fun findByEmail(email: String): User? =
+        connection().queryOne(
+            """
+            SELECT id, organization_id, email, display_name, role, active, password_salt, password_hash
+            FROM queuedos_users
+            WHERE lower(email) = lower(?)
+            ORDER BY active DESC, organization_id
+            LIMIT 1
+            """.trimIndent(),
+            email
+        ) { user(it) }
+
     override fun findActiveById(userId: String): User? =
         connection().queryOne(
             """
@@ -119,6 +131,24 @@ private class JdbcUserRepository(
             user.passwordHash
         )
     }
+
+    override fun insertIfEmailAbsent(user: User): Boolean =
+        connection().executeCount(
+            """
+            INSERT INTO queuedos_users
+                (id, organization_id, email, display_name, role, active, password_salt, password_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT (organization_id, email) DO NOTHING
+            """.trimIndent(),
+            user.id,
+            user.organizationId,
+            user.email,
+            user.displayName,
+            user.role.name,
+            user.active,
+            user.passwordSalt,
+            user.passwordHash
+        ) == 1
 
     override fun update(user: User) {
         connection().execute(

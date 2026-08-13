@@ -15,11 +15,24 @@ import {
   Workflow
 } from '../../core/api.models';
 import {WorkflowStatusPatch, WorkflowTransitionPatch} from '../../state/queue.models';
+import {AdminActivityHooksPanelComponent} from './admin-activity-hooks-panel.component';
+import {AdminDeletedTicketsPanelComponent} from './admin-deleted-tickets-panel.component';
+import {AdminProjectsPanelComponent} from './admin-projects-panel.component';
+import {AdminTicketTypesPanelComponent} from './admin-ticket-types-panel.component';
+import {AdminUsersPanelComponent} from './admin-users-panel.component';
+import {AdminWorkflowPanelComponent} from './admin-workflow-panel.component';
 
 @Component({
   selector: 'qd-admin-view',
   standalone: true,
-  imports: [],
+  imports: [
+    AdminActivityHooksPanelComponent,
+    AdminDeletedTicketsPanelComponent,
+    AdminProjectsPanelComponent,
+    AdminTicketTypesPanelComponent,
+    AdminUsersPanelComponent,
+    AdminWorkflowPanelComponent
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <div class="admin-grid">

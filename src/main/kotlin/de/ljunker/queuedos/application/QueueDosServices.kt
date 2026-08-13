@@ -51,10 +51,42 @@ class AuthenticationService(
             AuthenticatedUser(tokenCodec.createToken(authenticatedUser.id), authenticatedUser)
         }
 
-    fun loginMicrosoft(email: String): AuthenticatedUser =
+    fun loginMicrosoft(userInfo: MicrosoftUserInfo, allowedDomains: Set<String>): AuthenticatedUser =
         transactions.inTransaction {
-            val user = repositories.users.findActiveByEmail(normalizeEmail(email))
-                ?: throw UnauthorizedFailure("Microsoft account is not linked to an active QueueDos user.")
+            val email = normalizeEmail(userInfo.email)
+            val domain = email.substringAfterLast('@')
+            if (allowedDomains.none { it.equals(domain, ignoreCase = true) }) {
+                throw UnauthorizedFailure("Microsoft account is not allowed to access QueueDos.")
+            }
+
+            val existingUser = repositories.users.findByEmail(email)
+            if (existingUser != null) {
+                if (!existingUser.active) {
+                    throw UnauthorizedFailure("Microsoft account is linked to an inactive QueueDos user.")
+                }
+                return@inTransaction AuthenticatedUser(tokenCodec.createToken(existingUser.id), existingUser)
+            }
+
+            if (repositories.organizations.listById(DEFAULT_ORGANIZATION_ID).isEmpty()) {
+                throw BadRequestFailure("Default QueueDos organization '$DEFAULT_ORGANIZATION_ID' is not configured.")
+            }
+            val fallbackName = email.substringBeforeLast('@').ifBlank { email }
+            val candidate = User(
+                id = id("user"),
+                organizationId = DEFAULT_ORGANIZATION_ID,
+                email = email,
+                displayName = userInfo.name.trim().ifBlank { fallbackName }.take(160),
+                role = Role.MEMBER,
+                active = true,
+                passwordSalt = BCRYPT_PASSWORD_MARKER,
+                passwordHash = hashPassword(oauthSecret())
+            )
+            val user = if (repositories.users.insertIfEmailAbsent(candidate)) {
+                candidate
+            } else {
+                repositories.users.findByEmail(email)?.takeIf(User::active)
+                    ?: throw UnauthorizedFailure("Microsoft account could not be linked to QueueDos.")
+            }
             AuthenticatedUser(tokenCodec.createToken(user.id), user)
         }
 
@@ -63,6 +95,8 @@ class AuthenticationService(
             tokenCodec.userIdFromToken(token)?.let(repositories.users::findActiveById)
         }
 }
+
+private const val DEFAULT_ORGANIZATION_ID = "org-default"
 
 class WorkspaceQueryService(
     private val transactions: TransactionRunner,
