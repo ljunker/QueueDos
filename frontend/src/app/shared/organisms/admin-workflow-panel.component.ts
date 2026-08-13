@@ -11,8 +11,13 @@ import { WorkflowTransitionEditorComponent } from '../molecules/workflow-transit
   imports: [WorkflowStatusEditorComponent, WorkflowTransitionEditorComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <section class="panel wide">
-      <h3>Workflow</h3>
+    <section class="panel wide workflow-panel">
+      <div class="workflow-panel-heading">
+        <div>
+          <h3>Workflow</h3>
+          <p>Configure the lifecycle of tickets and who can move them between statuses.</p>
+        </div>
+      </div>
       @if (workflowDraft(); as workflow) {
         <div class="workflow-editor">
           <qd-workflow-status-editor
@@ -27,7 +32,7 @@ import { WorkflowTransitionEditorComponent } from '../molecules/workflow-transit
             (transitionPatched)="transitionPatched.emit($event)"
             (transitionRemoved)="transitionRemoved.emit($event)" />
         </div>
-        <div class="actions">
+        <div class="actions workflow-actions">
           <button type="button" class="primary" (click)="workflowSaved.emit(workflow)">Save workflow</button>
         </div>
       } @else {

@@ -9,29 +9,40 @@ import { sortedStatuses } from '../../state/queue.selectors';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div>
+    <section class="workflow-section">
       <div class="section-heading">
-        <span>Statuses</span>
+        <div>
+          <h4>Statuses</h4>
+          <p>Define the ordered steps tickets can move through.</p>
+        </div>
         <button type="button" (click)="statusAdded.emit()">Add status</button>
       </div>
-      <div class="editor-list">
+      <div class="editor-list status-list">
         @for (status of sortedStatuses(workflow()); track status.id; let index = $index) {
           <div class="editor-row status-row">
-            <input [value]="status.name" aria-label="Status name" (input)="patchStatus(index, { name: valueOf($event) })">
-            <select [value]="status.category" aria-label="Status category" (change)="patchStatus(index, { category: valueOf($event) })">
-              <option value="TODO">Todo</option>
-              <option value="IN_PROGRESS">In progress</option>
-              <option value="DONE">Done</option>
-            </select>
+            <label class="editor-field">
+              <span>Name</span>
+              <input [value]="status.name" (input)="patchStatus(index, { name: valueOf($event) })">
+            </label>
+            <label class="editor-field">
+              <span>Category</span>
+              <select [value]="status.category" (change)="patchStatus(index, { category: valueOf($event) })">
+                <option value="TODO">Todo</option>
+                <option value="IN_PROGRESS">In progress</option>
+                <option value="DONE">Done</option>
+              </select>
+            </label>
             <div class="row-actions">
-              <button type="button" class="icon-button" aria-label="Move status up" [disabled]="index === 0" (click)="statusMoved.emit({index, direction: -1})">↑</button>
-              <button type="button" class="icon-button" aria-label="Move status down" [disabled]="index === workflow().statuses.length - 1" (click)="statusMoved.emit({index, direction: 1})">↓</button>
-              <button type="button" (click)="statusRemoved.emit(index)">Remove</button>
+              <div class="order-buttons" aria-label="Change status order">
+                <button type="button" class="icon-button" aria-label="Move status up" title="Move up" [disabled]="index === 0" (click)="statusMoved.emit({index, direction: -1})">↑</button>
+                <button type="button" class="icon-button" aria-label="Move status down" title="Move down" [disabled]="index === workflow().statuses.length - 1" (click)="statusMoved.emit({index, direction: 1})">↓</button>
+              </div>
+              <button type="button" class="danger" (click)="statusRemoved.emit(index)">Remove</button>
             </div>
           </div>
         }
       </div>
-    </div>
+    </section>
   `
 })
 export class WorkflowStatusEditorComponent {

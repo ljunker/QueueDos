@@ -643,6 +643,11 @@ qd-workspace-tab-host {
   gap: 16px;
 }
 
+.admin-grid > qd-admin-workflow-panel {
+  min-width: 0;
+  grid-column: 1 / -1;
+}
+
 .panel {
   min-width: 0;
   display: grid;
@@ -758,8 +763,34 @@ qd-workspace-tab-host {
 
 .workflow-editor {
   display: grid;
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 14px;
+}
+
+.workflow-panel {
   gap: 18px;
+}
+
+.workflow-panel-heading h3,
+.workflow-panel-heading p,
+.workflow-section h4,
+.workflow-section p {
+  margin: 0;
+}
+
+.workflow-panel-heading p,
+.workflow-section p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.workflow-section {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-3);
 }
 
 .section-heading,
@@ -772,12 +803,65 @@ qd-workspace-tab-host {
   font-weight: 800;
 }
 
+.workflow-section .section-heading {
+  margin-bottom: 12px;
+}
+
+.workflow-section .section-heading h4 {
+  font-size: 16px;
+}
+
+.editor-field {
+  min-width: 0;
+  gap: 5px;
+}
+
+.editor-field > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .editor-row.status-row {
-  grid-template-columns: minmax(130px, 1fr) minmax(120px, 0.7fr) minmax(196px, auto);
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 0.55fr) auto;
+  align-items: end;
 }
 
 .editor-row.transition-row {
-  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) minmax(150px, 1fr) minmax(170px, 1fr) auto auto auto;
+  grid-template-columns: repeat(3, minmax(140px, 1fr)) minmax(210px, 1.25fr);
+  align-items: end;
+}
+
+.transition-controls {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.transition-flags,
+.order-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workflow-actions {
+  margin: 0;
+  padding-top: 2px;
+}
+
+.workflow-actions button {
+  min-width: 150px;
+}
+
+@media (max-width: 1180px) {
+  .editor-row.transition-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .inline-check {
@@ -1285,6 +1369,25 @@ qd-workspace-tab-host {
   .wizard-editor-row,
   .wizard-review {
     grid-template-columns: 1fr;
+  }
+
+  .transition-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .transition-flags {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .transition-controls .danger,
+  .status-row .row-actions {
+    width: 100%;
+  }
+
+  .status-row .row-actions {
+    justify-content: space-between;
   }
 
   .wizard-review section:last-child {

@@ -9,62 +9,78 @@ import { sortedStatuses } from '../../state/queue.selectors';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div>
+    <section class="workflow-section">
       <div class="section-heading">
-        <span>Transitions</span>
+        <div>
+          <h4>Transitions</h4>
+          <p>Control which status changes are available and who may use them.</p>
+        </div>
         <button type="button" (click)="transitionAdded.emit()" [disabled]="workflow().statuses.length < 2">Add transition</button>
       </div>
-      <div class="editor-list">
+      <div class="editor-list transition-list">
         @for (transition of workflow().transitions; track transition.id; let index = $index) {
           <div class="editor-row transition-row">
-            <select
-              [value]="transition.fromStatusId ?? ''"
-              aria-label="From status"
-              (change)="patchTransition(index, { fromStatusId: valueOf($event) || null, globalTransition: !valueOf($event) })">
-              <option value="">Any status</option>
-              @for (status of sortedStatuses(workflow()); track status.id) {
-                <option [value]="status.id">{{ status.name }}</option>
-              }
-            </select>
-            <select
-              [value]="transition.toStatusId"
-              aria-label="To status"
-              (change)="patchTransition(index, { toStatusId: valueOf($event) })">
-              @for (status of sortedStatuses(workflow()); track status.id) {
-                <option [value]="status.id">{{ status.name }}</option>
-              }
-            </select>
-            <select
-              [value]="roleSelectValue(transition.allowedRoles)"
-              aria-label="Allowed roles"
-              (change)="patchTransition(index, { allowedRoles: rolesFromSelect($event) })">
-              <option value="BOTH">Admin + Member</option>
-              <option value="ADMIN">Admin</option>
-              <option value="MEMBER">Member</option>
-            </select>
-            <input
-              [value]="transition.requiredFields.join(', ')"
-              placeholder="required fields"
-              (input)="patchTransition(index, { requiredFields: fieldsFromInput($event) })">
-            <label class="inline-check">
-              <input
-                type="checkbox"
-                [checked]="transition.globalTransition"
-                (change)="patchTransition(index, { globalTransition: checked($event), fromStatusId: checked($event) ? null : workflow().statuses[0]?.id ?? null })">
-              Global
+            <label class="editor-field">
+              <span>From</span>
+              <select
+                [value]="transition.fromStatusId ?? ''"
+                (change)="patchTransition(index, { fromStatusId: valueOf($event) || null, globalTransition: !valueOf($event) })">
+                <option value="">Any status</option>
+                @for (status of sortedStatuses(workflow()); track status.id) {
+                  <option [value]="status.id">{{ status.name }}</option>
+                }
+              </select>
             </label>
-            <label class="inline-check">
-              <input
-                type="checkbox"
-                [checked]="transition.allowBackward !== false"
-                (change)="patchTransition(index, { allowBackward: checked($event) })">
-              Back
+            <label class="editor-field">
+              <span>To</span>
+              <select
+                [value]="transition.toStatusId"
+                (change)="patchTransition(index, { toStatusId: valueOf($event) })">
+                @for (status of sortedStatuses(workflow()); track status.id) {
+                  <option [value]="status.id">{{ status.name }}</option>
+                }
+              </select>
             </label>
-            <button type="button" (click)="transitionRemoved.emit(index)">Remove</button>
+            <label class="editor-field">
+              <span>Allowed roles</span>
+              <select
+                [value]="roleSelectValue(transition.allowedRoles)"
+                (change)="patchTransition(index, { allowedRoles: rolesFromSelect($event) })">
+                <option value="BOTH">Admin + Member</option>
+                <option value="ADMIN">Admin</option>
+                <option value="MEMBER">Member</option>
+              </select>
+            </label>
+            <label class="editor-field">
+              <span>Required fields</span>
+              <input
+                [value]="transition.requiredFields.join(', ')"
+                placeholder="e.g. assignee, priority"
+                (input)="patchTransition(index, { requiredFields: fieldsFromInput($event) })">
+            </label>
+            <div class="transition-controls">
+              <div class="transition-flags">
+                <label class="inline-check">
+                  <input
+                    type="checkbox"
+                    [checked]="transition.globalTransition"
+                    (change)="patchTransition(index, { globalTransition: checked($event), fromStatusId: checked($event) ? null : workflow().statuses[0]?.id ?? null })">
+                  From any status
+                </label>
+                <label class="inline-check">
+                  <input
+                    type="checkbox"
+                    [checked]="transition.allowBackward !== false"
+                    (change)="patchTransition(index, { allowBackward: checked($event) })">
+                  Allow backward move
+                </label>
+              </div>
+              <button type="button" class="danger" (click)="transitionRemoved.emit(index)">Remove</button>
+            </div>
           </div>
         }
       </div>
-    </div>
+    </section>
   `
 })
 export class WorkflowTransitionEditorComponent {

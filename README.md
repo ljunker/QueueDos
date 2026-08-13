@@ -96,6 +96,6 @@ docker buildx ls
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   -t kryptikker/queuedos:latest \
-  -t kryptikker/queuedos:755e2098 \
+  -t kryptikker/queuedos:9e105639 \
   --push .
 ```
