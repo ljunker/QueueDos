@@ -5,7 +5,15 @@ plugins {
 }
 
 group = "de.ljunker.queuedos"
-version = "0.1.0"
+
+val applicationVersion = providers.fileContents(layout.projectDirectory.file("VERSION")).asText.get().trim()
+val semanticVersionPattern = Regex(
+    """^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?$"""
+)
+require(semanticVersionPattern.matches(applicationVersion)) {
+    "VERSION must contain a SemVer value without a leading 'v' or build metadata, but was '$applicationVersion'."
+}
+version = applicationVersion
 
 application {
     mainClass.set("de.ljunker.queuedos.ApplicationKt")

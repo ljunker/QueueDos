@@ -380,6 +380,16 @@ tr:hover {
   min-width: 0;
 }
 
+.sidebar-meta {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.sidebar-footer .app-version {
+  opacity: 0.8;
+}
+
 .workspace {
   min-width: 0;
   display: grid;

@@ -148,6 +148,34 @@ class AngularFrontendContractTest {
         assertContains(routes, "static/index.html")
     }
 
+    @Test
+    fun applicationVersioningContractIsPresent() {
+        val version = projectFile("VERSION").trim()
+        val gradleBuild = projectFile("build.gradle.kts")
+        val frontendPackage = projectFile("frontend/package.json")
+        val angularRunner = projectFile("frontend/scripts/run-angular.mjs")
+        val applicationVersion = projectFile("frontend/src/app/core/application-version.ts")
+        val sidebar = projectFile("frontend/src/app/shared/organisms/sidebar.component.ts")
+        val dockerfile = projectFile("Dockerfile")
+        val publishScript = projectFile("scripts/publish-docker.sh")
+
+        assertTrue(
+            Regex(
+                """^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*)(?:\.(?:0|[1-9]\d*|\d*[A-Za-z-][0-9A-Za-z-]*))*))?$"""
+            ).matches(version)
+        )
+        assertContains(gradleBuild, "file(\"VERSION\")")
+        assertFalse("\"version\"" in frontendPackage)
+        assertContains(angularRunner, "QUEUEDOS_VERSION")
+        assertContains(applicationVersion, "`v\${APPLICATION_VERSION}`")
+        assertContains(sidebar, "app-version")
+        assertContains(sidebar, "applicationVersionLabel")
+        assertContains(dockerfile, "org.opencontainers.image.version")
+        assertContains(publishScript, "linux/amd64,linux/arm64")
+        assertContains(publishScript, "queuedos-builder")
+        assertContains(publishScript, "--dry-run")
+    }
+
     private fun projectFile(path: String): String =
         File(path).readText()
 }

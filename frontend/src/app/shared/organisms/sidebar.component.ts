@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 
 import { Organization, Project, PublicUser } from '../../core/api.models';
+import { APPLICATION_VERSION_LABEL } from '../../core/application-version';
 import { roleLabel } from '../../state/queue.selectors';
 import { AdminPage, WorkspaceTab } from '../../state/queue.models';
 
@@ -51,9 +52,12 @@ import { AdminPage, WorkspaceTab } from '../../state/queue.models';
       </nav>
 
       <div class="sidebar-footer">
-        @if (user(); as currentUser) {
-          <span>{{ currentUser.displayName }} ({{ roleLabel(currentUser.role) }})</span>
-        }
+        <div class="sidebar-meta">
+          @if (user(); as currentUser) {
+            <span>{{ currentUser.displayName }} ({{ roleLabel(currentUser.role) }})</span>
+          }
+          <span class="app-version">{{ applicationVersionLabel }}</span>
+        </div>
         <button type="button" class="ghost" (click)="logoutRequested.emit()">Sign out</button>
       </div>
     </aside>
@@ -74,6 +78,7 @@ export class SidebarComponent {
   readonly logoutRequested = output<void>();
 
   protected readonly roleLabel = roleLabel;
+  protected readonly applicationVersionLabel = APPLICATION_VERSION_LABEL;
   protected readonly adminItems: {page: Exclude<AdminPage, 'overview'>; label: string}[] = [
     {page: 'users', label: 'Users'},
     {page: 'projects', label: 'Projects'},

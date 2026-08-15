@@ -88,19 +88,33 @@ npm start
 Der Docker-Build baut das Angular-Frontend in einer eigenen Node-Stage und kopiert das Ergebnis in die Ktor-Ressourcen, damit `http://localhost:8080` die Angular-App ausliefert.
 
 
-Bauen mit 
+## Versionierung und Docker-Release
+
+`VERSION` im Projektstamm ist die einzige Quelle der QueueDos-Version. Sie enthält eine SemVer ohne führendes `v`,
+zum Beispiel `1.0.0` oder `1.1.0-rc.1`. Gradle, das Angular-Frontend und die Docker-Image-Metadaten verwenden diesen
+Wert. Das Frontend zeigt die Version als `v1.0.0` unten in der Seitenleiste an.
+
+Für ein neues Release zuerst `VERSION` erhöhen und die Änderung zusammen mit allen Release-Inhalten committen. Die
+Commit-Nachricht besteht gemäß Projektkonvention aus einer Überschrift und einer Liste der Änderungen. Anschließend
+bei Docker Hub anmelden und den geplanten Build prüfen:
+
 ```bash
-docker buildx create --name queuedos-builder --driver docker-container --use
+docker login
+scripts/publish-docker.sh --dry-run
 ```
+
+Der echte Publish-Lauf akzeptiert nur einen sauberen Git-Arbeitsbaum und verändert weder Git-Commits noch Git-Tags:
+
 ```bash
-docker buildx use queuedos-builder
-docker buildx inspect --bootstrap 
-docker buildx ls
+scripts/publish-docker.sh
 ```
-```bash
-docker buildx build \
-  --platform linux/amd64,linux/arm64 \
-  -t kryptikker/queuedos:latest \
-  -t kryptikker/queuedos:9e105639 \
-  --push .
-```
+
+Das Skript erstellt den Buildx-Builder `queuedos-builder` bei Bedarf mit dem `docker-container`-Treiber, aktiviert und
+initialisiert ihn und baut ein Multi-Arch-Image für `linux/amd64` und `linux/arm64`. Es pusht drei Docker-Tags:
+
+- `kryptikker/queuedos:latest`
+- `kryptikker/queuedos:v<VERSION>`, zum Beispiel `kryptikker/queuedos:v1.0.0`
+- `kryptikker/queuedos:<short-sha>`, zum Beispiel `kryptikker/queuedos:98134d33`
+
+Ein erneuter Publish derselben Version darf die bereits vorhandenen Tags aktualisieren. Der Dry-Run nimmt keine
+Änderungen an Docker oder dem Builder vor und pusht kein Image.
