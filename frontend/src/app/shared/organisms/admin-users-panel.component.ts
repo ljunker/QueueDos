@@ -1,11 +1,11 @@
 import {ChangeDetectionStrategy, Component, inject, input, OnDestroy, output, signal} from '@angular/core';
 import {FormControl, FormGroup, ReactiveFormsModule, Validators} from '@angular/forms';
 
-import {CreateUserRequest, PublicUser, Role, UpdateUserRequest} from '../../core/api.models';
+import {CreateUserRequest, PublicUser, SystemRole, UpdateUserRequest} from '../../core/api.models';
 import {TemporaryPasswordService} from '../../core/temporary-password.service';
 import {roleLabel} from '../../state/queue.selectors';
 
-type RoleFilter = 'ALL' | Role;
+type RoleFilter = 'ALL' | SystemRole;
 type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 
 @Component({
@@ -32,8 +32,8 @@ type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
           Role
           <select [formControl]="roleFilterControl">
             <option value="ALL">All roles</option>
-            <option value="ADMIN">Admin</option>
-            <option value="MEMBER">Member</option>
+            <option value="SYSTEM_ADMIN">System admin</option>
+            <option value="USER">User</option>
           </select>
         </label>
         <label>
@@ -64,7 +64,7 @@ type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
               <tr (click)="openEdit(user)">
                 <td><strong>{{ user.displayName }}</strong></td>
                 <td>{{ user.email }}</td>
-                <td>{{ roleLabel(user.role) }}</td>
+                <td>{{ roleLabel(user.systemRole) }}</td>
                 <td><span class="status-pill" [class.inactive]="!user.active">{{ user.active ? 'Active' : 'Inactive' }}</span></td>
                 <td>{{ user.localLoginEnabled ? 'Enabled' : 'Azure only' }}</td>
                 <td>{{ user.mustChangePassword ? 'Pending' : 'No' }}</td>
@@ -93,9 +93,9 @@ type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
             <label>Display name <input autocomplete="off" formControlName="displayName"></label>
             <label>
               Role
-              <select formControlName="role">
-                <option value="MEMBER">Member</option>
-                <option value="ADMIN">Admin</option>
+              <select formControlName="systemRole">
+                <option value="USER">User</option>
+                <option value="SYSTEM_ADMIN">System admin</option>
               </select>
             </label>
             <label class="checkbox-row">
@@ -129,9 +129,9 @@ type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
             <label>Display name <input formControlName="displayName"></label>
             <label>
               Role
-              <select formControlName="role" [attr.disabled]="isEditingSelf() ? true : null">
-                <option value="MEMBER">Member</option>
-                <option value="ADMIN">Admin</option>
+              <select formControlName="systemRole" [attr.disabled]="isEditingSelf() ? true : null">
+                <option value="USER">User</option>
+                <option value="SYSTEM_ADMIN">System admin</option>
               </select>
             </label>
             <label class="checkbox-row">
@@ -203,12 +203,12 @@ export class AdminUsersPanelComponent implements OnDestroy {
   protected readonly createForm = new FormGroup({
     email: new FormControl('', {nonNullable: true, validators: [Validators.required, Validators.email]}),
     displayName: new FormControl('', {nonNullable: true, validators: [Validators.required, Validators.maxLength(160)]}),
-    role: new FormControl<Role>('MEMBER', {nonNullable: true}),
+    systemRole: new FormControl<SystemRole>('USER', {nonNullable: true}),
     generateTemporaryPassword: new FormControl(false, {nonNullable: true})
   });
   protected readonly editForm = new FormGroup({
     displayName: new FormControl('', {nonNullable: true, validators: [Validators.required, Validators.maxLength(160)]}),
-    role: new FormControl<Role>('MEMBER', {nonNullable: true}),
+    systemRole: new FormControl<SystemRole>('USER', {nonNullable: true}),
     active: new FormControl(true, {nonNullable: true})
   });
 
@@ -218,13 +218,13 @@ export class AdminUsersPanelComponent implements OnDestroy {
     const status = this.statusFilterControl.value;
     return [...this.users()]
       .filter((user) => !query || `${user.displayName} ${user.email}`.toLowerCase().includes(query))
-      .filter((user) => role === 'ALL' || user.role === role)
+      .filter((user) => role === 'ALL' || user.systemRole === role)
       .filter((user) => status === 'ALL' || (status === 'ACTIVE' ? user.active : !user.active))
       .sort((left, right) => left.displayName.localeCompare(right.displayName, undefined, {sensitivity: 'base'}));
   }
 
   protected openCreate(): void {
-    this.createForm.reset({email: '', displayName: '', role: 'MEMBER', generateTemporaryPassword: false});
+    this.createForm.reset({email: '', displayName: '', systemRole: 'USER', generateTemporaryPassword: false});
     this.createOpen.set(true);
   }
 
@@ -234,14 +234,14 @@ export class AdminUsersPanelComponent implements OnDestroy {
 
   protected createUser(): void {
     if (this.createForm.invalid) return;
-    const {email, displayName, role, generateTemporaryPassword} = this.createForm.getRawValue();
-    this.userCreated.emit({request: {email, displayName, role}, generateTemporaryPassword});
+    const {email, displayName, systemRole, generateTemporaryPassword} = this.createForm.getRawValue();
+    this.userCreated.emit({request: {email, displayName, systemRole}, generateTemporaryPassword});
     this.closeCreate();
   }
 
   protected openEdit(user: PublicUser): void {
     this.editingUser.set(user);
-    this.editForm.reset({displayName: user.displayName, role: user.role, active: user.active});
+    this.editForm.reset({displayName: user.displayName, systemRole: user.systemRole, active: user.active});
   }
 
   protected closeEdit(): void {

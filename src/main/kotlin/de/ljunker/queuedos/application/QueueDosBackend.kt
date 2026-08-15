@@ -38,6 +38,7 @@ class QueueDosBackend private constructor(
                     ),
                     queries = WorkspaceQueryService(transactions, repositories),
                     projects = ProjectService(transactions, repositories),
+                    projectMemberships = ProjectMembershipService(transactions, repositories),
                     users = UserService(transactions, repositories),
                     ticketTypes = TicketTypeService(transactions, repositories),
                     workflows = WorkflowService(transactions, repositories),

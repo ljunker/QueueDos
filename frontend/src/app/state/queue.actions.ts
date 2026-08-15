@@ -22,6 +22,7 @@ import {
   TicketRevisionSummary,
   UpdateActivityHookRequest,
   UpdateProjectRequest,
+  ProjectRole,
   UpdateSavedTicketFilterRequest,
   UpdateTicketTypeRequest,
   UpdateUserRequest
@@ -98,6 +99,10 @@ export const QueueActions = createActionGroup({
     'Project Update Requested': props<{ projectId: string; request: UpdateProjectRequest }>(),
     'Project Delete Requested': props<{ projectId: string }>(),
     'Project Deleted': props<{ projectId: string }>(),
+    'Project Member Search Requested': props<{ projectId: string; query: string }>(),
+    'Project Member Search Succeeded': props<{ users: PublicUser[] }>(),
+    'Project Membership Save Requested': props<{ projectId: string; userId: string; role: ProjectRole }>(),
+    'Project Membership Delete Requested': props<{ projectId: string; userId: string }>(),
     'User Create Requested': props<{ request: CreateUserRequest; generateTemporaryPassword: boolean }>(),
     'User Update Requested': props<{ userId: string; request: UpdateUserRequest }>(),
     'User Temporary Password Requested': props<{ user: PublicUser }>(),

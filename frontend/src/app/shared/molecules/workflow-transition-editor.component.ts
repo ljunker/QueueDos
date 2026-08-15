@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 
-import { Role, Workflow } from '../../core/api.models';
+import {ProjectRole, Workflow} from '../../core/api.models';
 import { WorkflowTransitionPatch } from '../../state/queue.models';
 import { sortedStatuses } from '../../state/queue.selectors';
 
@@ -108,12 +108,12 @@ export class WorkflowTransitionEditorComponent {
     return this.valueOf(event).split(',').map((value) => value.trim()).filter(Boolean);
   }
 
-  protected roleSelectValue(roles: Role[]): 'BOTH' | Role {
+  protected roleSelectValue(roles: ProjectRole[]): 'BOTH' | ProjectRole {
     return roles.includes('ADMIN') && roles.includes('MEMBER') ? 'BOTH' : roles[0] ?? 'MEMBER';
   }
 
-  protected rolesFromSelect(event: Event): Role[] {
+  protected rolesFromSelect(event: Event): ProjectRole[] {
     const value = this.valueOf(event);
-    return value === 'BOTH' ? ['ADMIN', 'MEMBER'] : [value as Role];
+    return value === 'BOTH' ? ['ADMIN', 'MEMBER'] : [value as ProjectRole];
   }
 }

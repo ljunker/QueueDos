@@ -72,6 +72,10 @@ class DatabaseMigrationTest {
                 assertTrue(it.next())
                 assertEquals(3, it.getInt(1))
             }
+            connection.createStatement().executeQuery("SELECT count(*) FROM queuedos_project_memberships").use {
+                assertTrue(it.next())
+                assertEquals(0, it.getInt(1))
+            }
         }
     }
 

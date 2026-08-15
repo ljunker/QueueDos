@@ -4,6 +4,7 @@ import {
   BootstrapResponse,
   Priority,
   Project,
+  ProjectRole,
   PublicUser,
   Ticket,
   TicketType,
@@ -37,13 +38,17 @@ export const selectProjectCreating = createSelector(selectQueueState, (state) =>
 export const selectProjectCreateError = createSelector(selectQueueState, (state) => state.projectCreateError);
 export const selectWorkflowDraft = createSelector(selectQueueState, (state) => state.workflowDraft);
 export const selectToast = createSelector(selectQueueState, (state) => state.toast);
+export const selectProjectMemberCandidates = createSelector(selectQueueState, (state) => state.projectMemberCandidates);
 
 export const selectCurrentUser = createSelector(selectData, (data) => data?.currentUser ?? null);
-export const selectIsAdmin = createSelector(selectCurrentUser, (user) => user?.role === 'ADMIN');
+export const selectIsSystemAdmin = createSelector(
+  selectCurrentUser,
+  (user) => user?.systemRole === 'SYSTEM_ADMIN'
+);
 export const selectOrganizations = createSelector(selectData, (data) => data?.organizations ?? []);
 export const selectProjects = createSelector(selectData, (data) => data?.projects ?? []);
 export const selectUsers = createSelector(selectData, (data) => data?.users ?? []);
-export const selectActiveUsers = createSelector(selectUsers, (users) => users.filter((user) => user.active));
+export const selectProjectMemberships = createSelector(selectData, (data) => data?.projectMemberships ?? []);
 export const selectTicketTypes = createSelector(selectData, (data) => data?.ticketTypes ?? []);
 export const selectPriorities = createSelector(selectData, (data) => data?.priorities ?? []);
 export const selectSavedTicketFilters = createSelector(selectData, (data) => data?.savedTicketFilters ?? []);
@@ -52,6 +57,28 @@ export const selectSelectedProject = createSelector(
   selectProjects,
   selectSelectedProjectId,
   (projects, projectId) => projects.find((project) => project.id === projectId) ?? null
+);
+
+export const selectCurrentProjectRole = createSelector(
+  selectCurrentUser,
+  selectIsSystemAdmin,
+  selectProjectMemberships,
+  selectSelectedProjectId,
+  (user, systemAdmin, memberships, projectId): ProjectRole =>
+    systemAdmin ? 'ADMIN' : memberships.find((item) => item.projectId === projectId && item.userId === user?.id)?.role ?? 'MEMBER'
+);
+
+export const selectIsAdmin = createSelector(selectCurrentProjectRole, (role) => role === 'ADMIN');
+export const selectCanUseAdmin = selectIsAdmin;
+
+export const selectActiveUsers = createSelector(
+  selectUsers,
+  selectProjectMemberships,
+  selectSelectedProjectId,
+  (users, memberships, projectId) => {
+    const memberIds = new Set(memberships.filter((item) => item.projectId === projectId).map((item) => item.userId));
+    return users.filter((user) => user.active && memberIds.has(user.id));
+  }
 );
 
 export const selectSelectedWorkflow = createSelector(
@@ -217,8 +244,8 @@ export function priorityLabel(priority: Priority): string {
   }[priority];
 }
 
-export function roleLabel(role: PublicUser['role']): string {
-  return role === 'ADMIN' ? 'Admin' : 'Member';
+export function roleLabel(role: PublicUser['systemRole']): string {
+  return role === 'SYSTEM_ADMIN' ? 'System admin' : 'User';
 }
 
 export function sortedStatuses(workflow: Workflow | null): WorkflowStatus[] {

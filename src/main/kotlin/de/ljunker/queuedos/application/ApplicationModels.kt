@@ -7,6 +7,7 @@ data class BootstrapData(
     val organizations: List<Organization>,
     val users: List<User>,
     val projects: List<Project>,
+    val projectMemberships: List<ProjectMembership>,
     val ticketTypes: List<TicketType>,
     val workflows: List<Workflow>,
     val tickets: List<Ticket>,
@@ -60,13 +61,13 @@ data class UpdateProjectCommand(
 data class CreateUserCommand(
     val email: String,
     val displayName: String,
-    val role: Role,
+    val systemRole: SystemRole,
     val password: String?
 )
 
 data class UpdateUserCommand(
     val displayName: String?,
-    val role: Role?,
+    val systemRole: SystemRole?,
     val active: Boolean?,
     val password: String?
 )

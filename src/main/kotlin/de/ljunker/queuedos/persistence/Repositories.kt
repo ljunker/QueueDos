@@ -17,8 +17,17 @@ interface UserRepository {
     fun emailExists(organizationId: String, email: String): Boolean
     fun insert(user: User)
     fun insertIfEmailAbsent(user: User): Boolean
-    fun countActiveAdminsForUpdate(organizationId: String): Int
+    fun countActiveSystemAdminsForUpdate(organizationId: String): Int
     fun update(user: User)
+}
+
+interface ProjectMembershipRepository {
+    fun listByOrganization(organizationId: String): List<ProjectMembership>
+    fun listByProject(organizationId: String, projectId: String): List<ProjectMembership>
+    fun listByUser(organizationId: String, userId: String): List<ProjectMembership>
+    fun find(organizationId: String, projectId: String, userId: String): ProjectMembership?
+    fun upsert(membership: ProjectMembership)
+    fun delete(projectId: String, userId: String)
 }
 
 interface ProjectRepository {
@@ -62,6 +71,7 @@ interface TicketRepository {
     fun updateVersioned(ticket: Ticket, expectedVersion: Long): Boolean
     fun setCommitment(ticketId: String, userId: String, committed: Boolean)
     fun replaceCommitments(ticketId: String, userIds: List<String>)
+    fun referencedUserIds(organizationId: String, projectIds: Set<String>): Set<String>
     fun comments(organizationId: String, ticketId: String? = null): List<TicketComment>
     fun changes(organizationId: String, ticketId: String? = null): List<TicketChange>
     fun revisions(organizationId: String, ticketId: String, beforeVersion: Long?, limit: Int): List<TicketRevision>
@@ -101,6 +111,7 @@ data class QueueRepositories(
     val organizations: OrganizationRepository,
     val users: UserRepository,
     val projects: ProjectRepository,
+    val projectMemberships: ProjectMembershipRepository,
     val ticketTypes: TicketTypeRepository,
     val workflows: WorkflowRepository,
     val tickets: TicketRepository,

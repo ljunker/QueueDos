@@ -17,9 +17,9 @@ internal fun CreateProjectRequest.toCommand() =
 
 internal fun UpdateProjectRequest.toCommand() = UpdateProjectCommand(key, name, description, archived, color)
 
-internal fun CreateUserRequest.toCommand() = CreateUserCommand(email, displayName, role, password)
+internal fun CreateUserRequest.toCommand() = CreateUserCommand(email, displayName, systemRole, password)
 
-internal fun UpdateUserRequest.toCommand() = UpdateUserCommand(displayName, role, active, password)
+internal fun UpdateUserRequest.toCommand() = UpdateUserCommand(displayName, systemRole, active, password)
 
 internal fun CreateTicketTypeRequest.toCommand() = CreateTicketTypeCommand(projectId, name, description, color)
 
@@ -88,6 +88,7 @@ internal fun BootstrapData.toResponse() =
         organizations = organizations.map(Organization::toResponse),
         users = users.map(User::toResponse),
         projects = projects.map(Project::toResponse),
+        projectMemberships = projectMemberships.map(ProjectMembership::toResponse),
         ticketTypes = ticketTypes.map(TicketType::toResponse),
         workflows = workflows.map(Workflow::toResponse),
         tickets = tickets.map(Ticket::toResponse),
@@ -125,10 +126,12 @@ internal fun TicketRevision.toDetailResponse() = TicketRevisionDetailResponse(to
 internal fun Organization.toResponse() = OrganizationResponse(id, name)
 
 internal fun User.toResponse() =
-    UserResponse(id, organizationId, email, displayName, role, active, localLoginEnabled, mustChangePassword)
+    UserResponse(id, organizationId, email, displayName, systemRole, active, localLoginEnabled, mustChangePassword)
 
 internal fun Project.toResponse() =
     ProjectResponse(id, organizationId, key, name, description, color, nextTicketNumber, archived)
+
+internal fun ProjectMembership.toResponse() = ProjectMembershipResponse(projectId, userId, role)
 
 internal fun TicketType.toResponse() =
     TicketTypeResponse(id, organizationId, projectId, name, description, color)

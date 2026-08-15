@@ -12,7 +12,7 @@ import {Project, Ticket, UpdateProjectRequest} from '../../core/api.models';
     <section class="panel">
       <div class="section-heading">
         <h3>Projects</h3>
-        <button type="button" class="primary" (click)="projectWizardOpened.emit()">New project</button>
+        @if (isSystemAdmin()) { <button type="button" class="primary" (click)="projectWizardOpened.emit()">New project</button> }
       </div>
       <div class="admin-list">
         @for (project of projects(); track project.id) {
@@ -61,7 +61,7 @@ import {Project, Ticket, UpdateProjectRequest} from '../../core/api.models';
           </div>
         </form>
 
-        <section class="project-danger-zone">
+        @if (isSystemAdmin()) { <section class="project-danger-zone">
           <div>
             <strong>Delete project</strong>
             <p>This permanently deletes the project and all of its tickets, ticket types, workflow and saved project
@@ -87,7 +87,7 @@ import {Project, Ticket, UpdateProjectRequest} from '../../core/api.models';
               </div>
             </div>
           }
-        </section>
+        </section> }
       }
     </section>
   `
@@ -96,6 +96,7 @@ export class AdminProjectsPanelComponent {
   readonly projects = input<Project[]>([]);
   readonly selectedProject = input<Project | null>(null);
   readonly tickets = input<Ticket[]>([]);
+  readonly isSystemAdmin = input(false);
 
   readonly projectWizardOpened = output<void>();
   readonly projectUpdated = output<{projectId: string; request: UpdateProjectRequest}>();

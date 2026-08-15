@@ -1,7 +1,8 @@
 package de.ljunker.queuedos.api
 
 import de.ljunker.queuedos.application.QueueDosBackend
-import de.ljunker.queuedos.domain.Role
+import de.ljunker.queuedos.domain.ProjectRole
+import de.ljunker.queuedos.domain.SystemRole
 import de.ljunker.queuedos.domain.SavedTicketFilterView
 import de.ljunker.queuedos.module
 import de.ljunker.queuedos.support.PostgresTestBackend
@@ -48,6 +49,14 @@ class ApiRoutesTest {
             jsonBody(CreateProjectRequest("OPS", "Operations"))
         }.body<ProjectResponse>()
         assertEquals("OPS", project.key)
+
+        assertEquals(
+            HttpStatusCode.OK,
+            client.put("/api/projects/${project.id}/members/user-member") {
+                auth(adminToken)
+                jsonBody(UpdateProjectMembershipRequest(ProjectRole.MEMBER))
+            }.status
+        )
 
         val bootstrap = client.get("/api/bootstrap") {
             auth(adminToken)
@@ -174,7 +183,7 @@ class ApiRoutesTest {
                             id = "transition-admin-only",
                             fromStatusId = sourceStatus,
                             toStatusId = targetStatus,
-                            allowedRoles = listOf(Role.ADMIN)
+                            allowedRoles = listOf(ProjectRole.ADMIN)
                         )
                     )
                 )
@@ -328,7 +337,7 @@ class ApiRoutesTest {
 
         val user = client.post("/api/users") {
             auth(adminToken)
-            jsonBody(CreateUserRequest("api-user@example.com", "API User", Role.MEMBER, password = null))
+            jsonBody(CreateUserRequest("api-user@example.com", "API User", SystemRole.USER, password = null))
         }.body<UserResponse>()
         assertEquals(false, user.localLoginEnabled)
         assertEquals(false, user.mustChangePassword)

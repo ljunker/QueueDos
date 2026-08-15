@@ -6,6 +6,8 @@ import {
   CreateTicketTypeRequest,
   CreateUserRequest,
   Project,
+  ProjectMembership,
+  ProjectRole,
   PublicUser,
   Ticket,
   TicketType,
@@ -19,6 +21,7 @@ import {AdminPage, WorkflowStatusPatch, WorkflowTransitionPatch} from '../../sta
 import {AdminActivityHooksPanelComponent} from './admin-activity-hooks-panel.component';
 import {AdminDeletedTicketsPanelComponent} from './admin-deleted-tickets-panel.component';
 import {AdminProjectsPanelComponent} from './admin-projects-panel.component';
+import {AdminProjectMembersPanelComponent} from './admin-project-members-panel.component';
 import {AdminTicketTypesPanelComponent} from './admin-ticket-types-panel.component';
 import {AdminUsersPanelComponent} from './admin-users-panel.component';
 import {AdminWorkflowPanelComponent} from './admin-workflow-panel.component';
@@ -30,6 +33,7 @@ import {AdminWorkflowPanelComponent} from './admin-workflow-panel.component';
     AdminActivityHooksPanelComponent,
     AdminDeletedTicketsPanelComponent,
     AdminProjectsPanelComponent,
+    AdminProjectMembersPanelComponent,
     AdminTicketTypesPanelComponent,
     AdminUsersPanelComponent,
     AdminWorkflowPanelComponent
@@ -47,38 +51,44 @@ import {AdminWorkflowPanelComponent} from './admin-workflow-panel.component';
             </div>
           </div>
           <div class="metric-grid admin-metrics">
-            <button type="button" class="metric" (click)="pageSelected.emit('users')"><span>Active users</span><strong>{{ activeUserCount() }}</strong></button>
-            <button type="button" class="metric" (click)="pageSelected.emit('users')"><span>Inactive users</span><strong>{{ users().length - activeUserCount() }}</strong></button>
-            <button type="button" class="metric" (click)="pageSelected.emit('users')"><span>Admins</span><strong>{{ adminCount() }}</strong></button>
+            @if (isSystemAdmin()) {
+              <button type="button" class="metric" (click)="pageSelected.emit('users')"><span>Active users</span><strong>{{ activeUserCount() }}</strong></button>
+              <button type="button" class="metric" (click)="pageSelected.emit('users')"><span>Inactive users</span><strong>{{ users().length - activeUserCount() }}</strong></button>
+              <button type="button" class="metric" (click)="pageSelected.emit('users')"><span>System admins</span><strong>{{ adminCount() }}</strong></button>
+            }
             <button type="button" class="metric" (click)="pageSelected.emit('projects')"><span>Projects</span><strong>{{ projects().length }}</strong></button>
             <button type="button" class="metric" (click)="pageSelected.emit('trash')"><span>Deleted tickets</span><strong>{{ deletedTickets().length }}</strong></button>
-            <button type="button" class="metric" (click)="pageSelected.emit('integrations')"><span>Active integrations</span><strong>{{ activeIntegrationCount() }}</strong></button>
+            @if (isSystemAdmin()) {
+              <button type="button" class="metric" (click)="pageSelected.emit('integrations')"><span>Active integrations</span><strong>{{ activeIntegrationCount() }}</strong></button>
+            }
           </div>
           <section class="panel admin-shortcuts">
             <h3>Quick access</h3>
             <div class="quick-link-grid">
-              <button type="button" (click)="pageSelected.emit('users')">Manage users</button>
+              @if (isSystemAdmin()) { <button type="button" (click)="pageSelected.emit('users')">Manage users</button> }
               <button type="button" (click)="pageSelected.emit('projects')">Manage projects</button>
               <button type="button" (click)="pageSelected.emit('configuration')">Configure current project</button>
-              <button type="button" (click)="pageSelected.emit('integrations')">Manage integrations</button>
+              <button type="button" (click)="pageSelected.emit('members')">Manage project members</button>
+              @if (isSystemAdmin()) { <button type="button" (click)="pageSelected.emit('integrations')">Manage integrations</button> }
               <button type="button" (click)="pageSelected.emit('trash')">Open trash</button>
             </div>
           </section>
         </section>
       }
       @case ('users') {
-        <qd-admin-users-panel
+        @if (isSystemAdmin()) { <qd-admin-users-panel
           [users]="users()"
           [currentUser]="currentUser()"
           (userCreated)="userCreated.emit($event)"
           (userUpdated)="userUpdated.emit($event)"
-          (temporaryPasswordRequested)="temporaryPasswordRequested.emit($event)" />
+          (temporaryPasswordRequested)="temporaryPasswordRequested.emit($event)" /> }
       }
       @case ('projects') {
         <qd-admin-projects-panel
           [projects]="projects()"
           [selectedProject]="selectedProject()"
           [tickets]="tickets()"
+          [isSystemAdmin]="isSystemAdmin()"
           (projectWizardOpened)="projectWizardOpened.emit()"
           (projectUpdated)="projectUpdated.emit($event)"
           (projectDeleted)="projectDeleted.emit($event)"
@@ -111,12 +121,22 @@ import {AdminWorkflowPanelComponent} from './admin-workflow-panel.component';
             (workflowSaved)="workflowSaved.emit($event)" />
         </section>
       }
+      @case ('members') {
+        <qd-admin-project-members-panel
+          [project]="selectedProject()"
+          [memberships]="projectMemberships()"
+          [users]="users()"
+          [candidates]="memberCandidates()"
+          (memberSearchRequested)="memberSearchRequested.emit($event)"
+          (membershipSaved)="membershipSaved.emit($event)"
+          (membershipDeleted)="membershipDeleted.emit($event)" />
+      }
       @case ('integrations') {
-        <qd-admin-activity-hooks-panel
+        @if (isSystemAdmin()) { <qd-admin-activity-hooks-panel
           [hooks]="activityHooks()"
           (hookCreated)="activityHookCreated.emit($event)"
           (hookUpdated)="activityHookUpdated.emit($event)"
-          (hookDeleted)="activityHookDeleted.emit($event)" />
+          (hookDeleted)="activityHookDeleted.emit($event)" /> }
       }
       @case ('trash') {
         <qd-admin-deleted-tickets-panel
@@ -135,6 +155,9 @@ export class AdminViewComponent {
   readonly activityHooks = input<ActivityHook[]>([]);
   readonly users = input<PublicUser[]>([]);
   readonly currentUser = input<PublicUser | null>(null);
+  readonly isSystemAdmin = input(false);
+  readonly projectMemberships = input<ProjectMembership[]>([]);
+  readonly memberCandidates = input<PublicUser[]>([]);
   readonly projectTypes = input<TicketType[]>([]);
   readonly workflowDraft = input<Workflow | null>(null);
 
@@ -146,6 +169,9 @@ export class AdminViewComponent {
   readonly userCreated = output<{request: CreateUserRequest; generateTemporaryPassword: boolean}>();
   readonly userUpdated = output<{userId: string; request: UpdateUserRequest}>();
   readonly temporaryPasswordRequested = output<PublicUser>();
+  readonly memberSearchRequested = output<{projectId: string; query: string}>();
+  readonly membershipSaved = output<{projectId: string; userId: string; role: ProjectRole}>();
+  readonly membershipDeleted = output<{projectId: string; userId: string}>();
   readonly ticketTypeCreated = output<CreateTicketTypeRequest>();
   readonly ticketTypeUpdated = output<{typeId: string; request: UpdateTicketTypeRequest}>();
   readonly ticketTypeDeleted = output<string>();
@@ -167,7 +193,7 @@ export class AdminViewComponent {
   }
 
   protected adminCount(): number {
-    return this.users().filter((user) => user.role === 'ADMIN').length;
+    return this.users().filter((user) => user.systemRole === 'SYSTEM_ADMIN').length;
   }
 
   protected activeIntegrationCount(): number {

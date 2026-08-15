@@ -1,6 +1,6 @@
 import {createReducer, on} from '@ngrx/store';
 
-import {BootstrapResponse, TicketDetailResponse, TicketRevisionDetail, Workflow} from '../core/api.models';
+import {BootstrapResponse, PublicUser, TicketDetailResponse, TicketRevisionDetail, Workflow} from '../core/api.models';
 import {QueueActions} from './queue.actions';
 import {
   cloneWorkflow,
@@ -40,6 +40,7 @@ export interface QueueState {
   projectWizardOpen: boolean;
   projectCreating: boolean;
   projectCreateError: string;
+  projectMemberCandidates: PublicUser[];
   workflowDraft: Workflow | null;
   toast: string;
 }
@@ -66,6 +67,7 @@ export const initialState: QueueState = {
   projectWizardOpen: false,
   projectCreating: false,
   projectCreateError: '',
+  projectMemberCandidates: [],
   workflowDraft: null,
   toast: ''
 };
@@ -117,8 +119,9 @@ export const queueReducer = createReducer(
       loading: false,
       error: '',
       selectedProjectId,
-      activeTab: state.activeTab === 'admin' && data.currentUser.role !== 'ADMIN' ? 'board' : state.activeTab,
-      activeAdminPage: data.currentUser.role === 'ADMIN' ? state.activeAdminPage : 'overview',
+      activeTab: state.activeTab === 'admin' && !canUseAdmin(data, selectedProjectId) ? 'board' : state.activeTab,
+      activeAdminPage: allowedAdminPage(data, state.activeAdminPage),
+      projectMemberCandidates: [],
       workflowDraft: cloneWorkflow(workflowForProject(data, selectedProjectId))
     };
   }),
@@ -132,10 +135,10 @@ export const queueReducer = createReducer(
     const activeTab = routeState.activeTab ?? state.activeTab;
     return {
       ...state,
-      activeTab: activeTab === 'admin' && state.data && state.data.currentUser.role !== 'ADMIN' ? 'board' : activeTab,
+      activeTab: activeTab === 'admin' && state.data && !canUseAdmin(state.data, selectedProjectId) ? 'board' : activeTab,
       activeAdminPage:
-        activeTab === 'admin' && (!state.data || state.data.currentUser.role === 'ADMIN')
-          ? routeState.adminPage ?? 'overview'
+        activeTab === 'admin' && (!state.data || canUseAdmin(state.data, selectedProjectId))
+          ? state.data ? allowedAdminPage(state.data, routeState.adminPage ?? 'overview') : routeState.adminPage ?? 'overview'
           : state.activeAdminPage,
       selectedProjectId,
       detailTicketId: routeState.detailTicketId !== undefined ? routeState.detailTicketId : state.detailTicketId,
@@ -162,8 +165,15 @@ export const queueReducer = createReducer(
     detailTicketId: null,
     ticketDetail: null,
     openedRevision: null,
-    activeTab: state.activeTab === 'detail' ? 'board' : state.activeTab,
-    workflowDraft: cloneWorkflow(workflowForProject(state.data, projectId))
+    activeTab: state.activeTab === 'detail' || (state.activeTab === 'admin' && state.data && !canUseAdmin(state.data, projectId))
+      ? 'board'
+      : state.activeTab,
+    workflowDraft: cloneWorkflow(workflowForProject(state.data, projectId)),
+    projectMemberCandidates: []
+  })),
+  on(QueueActions.projectMemberSearchSucceeded, (state, {users}) => ({
+    ...state,
+    projectMemberCandidates: users
   })),
   on(QueueActions.tabSelected, (state, { tab }) => ({
     ...state,
@@ -449,6 +459,17 @@ function resolveProjectId(data: BootstrapResponse, preferredProjectId: string | 
 
 function workflowForProject(data: BootstrapResponse | null, projectId: string | null): Workflow | null {
   return data?.workflows.find((workflow) => workflow.projectId === projectId) ?? null;
+}
+
+function canUseAdmin(data: BootstrapResponse, projectId: string | null): boolean {
+  return data.currentUser.systemRole === 'SYSTEM_ADMIN' || data.projectMemberships.some(
+    (item) => item.userId === data.currentUser.id && item.projectId === projectId && item.role === 'ADMIN'
+  );
+}
+
+function allowedAdminPage(data: BootstrapResponse, page: AdminPage): AdminPage {
+  if (data.currentUser.systemRole === 'SYSTEM_ADMIN') return page;
+  return page === 'users' || page === 'integrations' ? 'overview' : page;
 }
 
 function newId(prefix: string): string {

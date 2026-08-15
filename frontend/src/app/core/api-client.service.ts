@@ -16,6 +16,7 @@ import {
   LoginRequest,
   LoginResponse,
   Project,
+  ProjectMembership,
   PublicUser,
   SaveWorkflowRequest,
   Ticket,
@@ -28,6 +29,7 @@ import {
   TransitionTicketRequest,
   UpdateActivityHookRequest,
   UpdateProjectRequest,
+  UpdateProjectMembershipRequest,
   UpdateSavedTicketFilterRequest,
   UpdateTicketRequest,
   UpdateTicketTypeRequest,
@@ -113,6 +115,18 @@ export class ApiClientService {
 
   deleteProject(id: string) {
     return this.http.delete<void>(`/api/projects/${id}`);
+  }
+
+  projectMemberCandidates(projectId: string, query: string) {
+    return this.http.get<PublicUser[]>(`/api/projects/${projectId}/member-candidates`, {params: {q: query}});
+  }
+
+  saveProjectMembership(projectId: string, userId: string, request: UpdateProjectMembershipRequest) {
+    return this.http.put<ProjectMembership>(`/api/projects/${projectId}/members/${userId}`, request);
+  }
+
+  deleteProjectMembership(projectId: string, userId: string) {
+    return this.http.delete<void>(`/api/projects/${projectId}/members/${userId}`);
   }
 
   createUser(request: CreateUserRequest) {

@@ -19,6 +19,7 @@ Vordefinierte Nutzer:
 
 - Anmeldung mit E-Mail/Passwort oder optionalem Microsoft-SSO mit automatischer Benutzeranlage.
 - Eine sichtbare Organisation mit mehreren Projekten.
+- Projektbezogene Zugriffssteuerung mit organisationsweiten Systemadmins sowie Projektadmins und Projekt-Membern.
 - Projektbezogene Ticketschlüssel wie `QDOS-1`.
 - Konfigurierbare Tickettypen.
 - Konfigurierbare Workflows mit Status, Übergängen, Rollenbeschränkungen und Metadaten für Pflichtfelder.
@@ -30,6 +31,10 @@ Vordefinierte Nutzer:
 - Persönliche projektübergreifende Ansicht für eigene Tickets.
 - Admin-Oberflächen für Nutzer, Projekte, Tickettypen, Workflows, wiederherstellbare gelöschte Tickets und
   Slack-Activity-Hooks.
+
+Systemadmins können alle Projekte verwalten und Nutzerkonten, Integrationen sowie Projekte organisationsweit
+administrieren. Andere Nutzer sehen ausschließlich Projekte, denen sie als Projektadmin oder Projekt-Member zugeteilt
+sind. Projektadmins verwalten Einstellungen, Workflow, Tickettypen, Mitglieder und Papierkorb ihres Projekts.
 
 Das Docker-Compose-Setup startet PostgreSQL und speichert QueueDos-Daten in relationalen Tabellen für Organisationen,
 Nutzer, Projekte, Tickettypen, Workflows, Workflow-Status, Workflow-Übergänge und Tickets. Flyway versioniert das

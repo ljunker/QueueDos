@@ -16,6 +16,7 @@ class QueueDosServices(
     val microsoftSso: MicrosoftSsoService,
     val queries: WorkspaceQueryService,
     val projects: ProjectService,
+    val projectMemberships: ProjectMembershipService,
     val users: UserService,
     val ticketTypes: TicketTypeService,
     val workflows: WorkflowService,
@@ -88,7 +89,7 @@ class AuthenticationService(
                 organizationId = DEFAULT_ORGANIZATION_ID,
                 email = email,
                 displayName = userInfo.name.trim().ifBlank { fallbackName }.take(160),
-                role = Role.MEMBER,
+                systemRole = SystemRole.USER,
                 active = true,
                 passwordSalt = BCRYPT_PASSWORD_MARKER,
                 passwordHash = hashPassword(oauthSecret()),
@@ -139,21 +140,50 @@ class WorkspaceQueryService(
 ) {
     fun bootstrap(actor: User): BootstrapData =
         transactions.inTransaction {
+            val allProjects = repositories.projects.listByOrganization(actor.organizationId)
+            val accessibleProjectIds = accessibleProjectIds(actor, allProjects)
+            val projects = allProjects.filter { it.id in accessibleProjectIds }
+            val memberships = repositories.projectMemberships.listByOrganization(actor.organizationId)
+                .filter { it.projectId in accessibleProjectIds }
+            val tickets = repositories.tickets.listByOrganization(actor.organizationId)
+                .filter { it.projectId in accessibleProjectIds }
+            val users = if (AuthorizationPolicies.isSystemAdmin(actor)) {
+                repositories.users.listByOrganization(actor.organizationId)
+            } else {
+                val relevantUserIds = buildSet {
+                    add(actor.id)
+                    memberships.forEach { add(it.userId) }
+                    addAll(repositories.tickets.referencedUserIds(actor.organizationId, accessibleProjectIds))
+                    tickets.forEach {
+                        add(it.reporterId)
+                        it.assigneeId?.let(::add)
+                        addAll(it.committedUserIds)
+                    }
+                }
+                repositories.users.listByOrganization(actor.organizationId).filter { it.id in relevantUserIds }
+            }
+            val projectAdminIds = projects.filter {
+                AuthorizationPolicies.projectRole(actor, it.id, repositories) == ProjectRole.ADMIN
+            }.mapTo(mutableSetOf()) { it.id }
             BootstrapData(
                 currentUser = actor,
                 organizations = repositories.organizations.listById(actor.organizationId),
-                users = repositories.users.listByOrganization(actor.organizationId),
-                projects = repositories.projects.listByOrganization(actor.organizationId),
-                ticketTypes = repositories.ticketTypes.listByOrganization(actor.organizationId),
-                workflows = repositories.workflows.listByOrganization(actor.organizationId),
-                tickets = repositories.tickets.listByOrganization(actor.organizationId),
-                deletedTickets = if (actor.role == Role.ADMIN) {
-                    repositories.tickets.listDeletedByOrganization(actor.organizationId)
-                } else {
-                    emptyList()
-                },
-                savedTicketFilters = repositories.savedTicketFilters.listForOwner(actor.organizationId, actor.id),
-                activityHooks = if (actor.role == Role.ADMIN) {
+                users = users,
+                projects = projects,
+                projectMemberships = memberships,
+                ticketTypes = repositories.ticketTypes.listByOrganization(actor.organizationId)
+                    .filter { it.projectId in accessibleProjectIds },
+                workflows = repositories.workflows.listByOrganization(actor.organizationId)
+                    .filter { it.projectId in accessibleProjectIds },
+                tickets = tickets,
+                deletedTickets = repositories.tickets.listDeletedByOrganization(actor.organizationId)
+                    .filter { it.projectId in projectAdminIds },
+                savedTicketFilters = repositories.savedTicketFilters.listForOwner(actor.organizationId, actor.id)
+                    .filter { filter ->
+                        val referencedProject = filter.projectId ?: filter.filters.projectId
+                        referencedProject == null || referencedProject in accessibleProjectIds
+                    },
+                activityHooks = if (AuthorizationPolicies.isSystemAdmin(actor)) {
                     repositories.activityHooks.listByOrganization(actor.organizationId)
                 } else {
                     emptyList()
@@ -173,7 +203,15 @@ class WorkspaceQueryService(
         sort: String?
     ): List<Ticket> =
         transactions.inTransaction {
+            val accessibleProjectIds = accessibleProjectIds(
+                actor,
+                repositories.projects.listByOrganization(actor.organizationId)
+            )
+            if (!projectId.isNullOrBlank() && projectId !in accessibleProjectIds) {
+                throw NotFoundFailure("Project not found.")
+            }
             var tickets = repositories.tickets.listByOrganization(actor.organizationId).asSequence()
+                .filter { it.projectId in accessibleProjectIds }
             if (!projectId.isNullOrBlank()) tickets = tickets.filter { it.projectId == projectId }
             if (!query.isNullOrBlank()) {
                 val needle = query.trim().lowercase(Locale.ROOT)
@@ -254,13 +292,20 @@ class WorkspaceQueryService(
     private fun requireReadableTicket(actor: User, ticketId: String): Ticket {
         val ticket = repositories.tickets.findIncludingDeleted(actor.organizationId, ticketId)
             ?: throw NotFoundFailure("Ticket not found.")
-        if (ticket.deletedAt != null && actor.role != Role.ADMIN) throw NotFoundFailure("Ticket not found.")
+        val role = AuthorizationPolicies.requireProjectAccess(actor, ticket.projectId, repositories)
+        if (ticket.deletedAt != null && role != ProjectRole.ADMIN) throw NotFoundFailure("Ticket not found.")
         return ticket
     }
 
     private fun requireTicket(actor: User, ticketId: String): Ticket =
         repositories.tickets.findById(actor.organizationId, ticketId)
+            ?.also { AuthorizationPolicies.requireProjectAccess(actor, it.projectId, repositories) }
             ?: throw NotFoundFailure("Ticket not found.")
+
+    private fun accessibleProjectIds(actor: User, projects: List<Project>): Set<String> =
+        if (AuthorizationPolicies.isSystemAdmin(actor)) projects.mapTo(mutableSetOf()) { it.id }
+        else repositories.projectMemberships.listByUser(actor.organizationId, actor.id)
+            .mapTo(mutableSetOf()) { it.projectId }
 }
 
 class ProjectService(
@@ -269,7 +314,7 @@ class ProjectService(
 ) {
     fun create(actor: User, command: CreateProjectCommand): Project =
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
+            AuthorizationPolicies.requireSystemAdmin(actor)
             val key = normalizeProjectKey(command.key)
             if (repositories.projects.keyExists(actor.organizationId, key)) {
                 throw ConflictFailure("A project with this key already exists.")
@@ -287,6 +332,7 @@ class ProjectService(
             val workflow = command.statuses?.let { configuredWorkflow(actor, project, it) }
                 ?: defaultWorkflow(actor.organizationId, project.id)
             repositories.projects.insert(project)
+            repositories.projectMemberships.upsert(ProjectMembership(project.id, actor.id, ProjectRole.ADMIN))
             ticketTypes.forEach(repositories.ticketTypes::insert)
             repositories.workflows.insert(workflow)
             project
@@ -294,7 +340,7 @@ class ProjectService(
 
     fun update(actor: User, projectId: String, command: UpdateProjectCommand): Project =
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
+            AuthorizationPolicies.requireProjectAdmin(actor, projectId, repositories)
             val project = requireProject(actor, projectId)
             val nextKey = command.key?.let(::normalizeProjectKey) ?: project.key
             if (nextKey != project.key) {
@@ -316,7 +362,7 @@ class ProjectService(
 
     fun delete(actor: User, projectId: String) {
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
+            AuthorizationPolicies.requireSystemAdmin(actor)
             val project = requireProject(actor, projectId)
             repositories.projects.delete(actor.organizationId, project.id)
         }
@@ -362,11 +408,58 @@ class ProjectService(
                     id = id("transition"),
                     fromStatusId = from.id,
                     toStatusId = to.id,
-                    allowedRoles = listOf(Role.ADMIN, Role.MEMBER)
+                    allowedRoles = listOf(ProjectRole.ADMIN, ProjectRole.MEMBER)
                 )
             }
         }
         return Workflow(id("workflow"), actor.organizationId, project.id, statuses, transitions)
+    }
+
+    private fun requireProject(actor: User, projectId: String): Project =
+        repositories.projects.findById(actor.organizationId, projectId)
+            ?: throw NotFoundFailure("Project not found.")
+}
+
+class ProjectMembershipService(
+    private val transactions: TransactionRunner,
+    private val repositories: QueueRepositories
+) {
+    fun candidates(actor: User, projectId: String, query: String): List<User> =
+        transactions.inTransaction {
+            requireProject(actor, projectId)
+            AuthorizationPolicies.requireProjectAdmin(actor, projectId, repositories)
+            val needle = query.trim().lowercase(Locale.ROOT)
+            if (needle.length < 2) throw BadRequestFailure("Member search needs at least two characters.")
+            val assignedIds = repositories.projectMemberships.listByProject(actor.organizationId, projectId)
+                .mapTo(mutableSetOf()) { it.userId }
+            repositories.users.listByOrganization(actor.organizationId).asSequence()
+                .filter { it.active && it.id !in assignedIds }
+                .filter {
+                    it.displayName.lowercase(Locale.ROOT).contains(needle) ||
+                        it.email.lowercase(Locale.ROOT).contains(needle)
+                }
+                .take(20)
+                .toList()
+        }
+
+    fun save(actor: User, projectId: String, userId: String, role: ProjectRole): ProjectMembership =
+        transactions.inTransaction {
+            requireProject(actor, projectId)
+            AuthorizationPolicies.requireProjectAdmin(actor, projectId, repositories)
+            val user = repositories.users.findById(actor.organizationId, userId)
+                ?.takeIf { it.active }
+                ?: throw NotFoundFailure("User not found.")
+            ProjectMembership(projectId, user.id, role).also(repositories.projectMemberships::upsert)
+        }
+
+    fun delete(actor: User, projectId: String, userId: String) {
+        transactions.inTransaction {
+            requireProject(actor, projectId)
+            AuthorizationPolicies.requireProjectAdmin(actor, projectId, repositories)
+            repositories.projectMemberships.find(actor.organizationId, projectId, userId)
+                ?: throw NotFoundFailure("Project membership not found.")
+            repositories.projectMemberships.delete(projectId, userId)
+        }
     }
 
     private fun requireProject(actor: User, projectId: String): Project =
@@ -380,7 +473,7 @@ class UserService(
 ) {
     fun create(actor: User, command: CreateUserCommand): User =
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
+            AuthorizationPolicies.requireSystemAdmin(actor)
             val email = normalizeEmail(command.email)
             if (repositories.users.emailExists(actor.organizationId, email)) {
                 throw ConflictFailure("A user with this email already exists.")
@@ -391,7 +484,7 @@ class UserService(
                 organizationId = actor.organizationId,
                 email = email,
                 displayName = requireName(command.displayName, "Display name"),
-                role = command.role,
+                systemRole = command.systemRole,
                 active = true,
                 passwordSalt = BCRYPT_PASSWORD_MARKER,
                 passwordHash = hashPassword(password ?: oauthSecret()),
@@ -402,16 +495,17 @@ class UserService(
 
     fun update(actor: User, userId: String, command: UpdateUserCommand): User =
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
+            AuthorizationPolicies.requireSystemAdmin(actor)
             val current = repositories.users.findById(actor.organizationId, userId)
                 ?: throw NotFoundFailure("User not found.")
-            val nextRole = command.role ?: current.role
+            val nextRole = command.systemRole ?: current.systemRole
             val nextActive = command.active ?: current.active
-            if (current.id == actor.id && (!nextActive || nextRole != Role.ADMIN)) {
+            if (current.id == actor.id && (!nextActive || nextRole != SystemRole.SYSTEM_ADMIN)) {
                 throw ConflictFailure("You cannot deactivate or remove admin access from your own account.")
             }
-            val activeAdminCount = repositories.users.countActiveAdminsForUpdate(actor.organizationId)
-            if (current.active && current.role == Role.ADMIN && (!nextActive || nextRole != Role.ADMIN) && activeAdminCount <= 1) {
+            val activeAdminCount = repositories.users.countActiveSystemAdminsForUpdate(actor.organizationId)
+            if (current.active && current.systemRole == SystemRole.SYSTEM_ADMIN &&
+                (!nextActive || nextRole != SystemRole.SYSTEM_ADMIN) && activeAdminCount <= 1) {
                 throw ConflictFailure("The last active admin cannot be deactivated or changed to member.")
             }
             val passwordHash = command.password?.takeIf { it.isNotBlank() }?.let {
@@ -419,7 +513,7 @@ class UserService(
             }
             current.copy(
                 displayName = command.displayName?.let { requireName(it, "Display name") } ?: current.displayName,
-                role = nextRole,
+                systemRole = nextRole,
                 active = nextActive,
                 passwordSalt = passwordHash?.first ?: current.passwordSalt,
                 passwordHash = passwordHash?.second ?: current.passwordHash,
@@ -430,7 +524,7 @@ class UserService(
 
     fun generateTemporaryPassword(actor: User, userId: String): String =
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
+            AuthorizationPolicies.requireSystemAdmin(actor)
             val current = repositories.users.findById(actor.organizationId, userId)
                 ?: throw NotFoundFailure("User not found.")
             val temporaryPassword = oauthSecret().take(24)
@@ -450,7 +544,7 @@ class TicketTypeService(
 ) {
     fun create(actor: User, command: CreateTicketTypeCommand): TicketType =
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
+            AuthorizationPolicies.requireProjectAdmin(actor, command.projectId, repositories)
             val project = requireProject(actor, command.projectId)
             val name = requireName(command.name, "Ticket type name")
             if (repositories.ticketTypes.nameExists(project.id, name)) {
@@ -468,8 +562,8 @@ class TicketTypeService(
 
     fun update(actor: User, typeId: String, command: UpdateTicketTypeCommand): TicketType =
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
             val current = requireTicketType(actor, typeId)
+            AuthorizationPolicies.requireProjectAdmin(actor, current.projectId, repositories)
             val nextName = command.name?.let { requireName(it, "Ticket type name") } ?: current.name
             if (!nextName.equals(current.name, ignoreCase = true) &&
                 repositories.ticketTypes.nameExists(current.projectId, nextName, current.id)
@@ -485,8 +579,8 @@ class TicketTypeService(
 
     fun delete(actor: User, typeId: String) {
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
             val current = requireTicketType(actor, typeId)
+            AuthorizationPolicies.requireProjectAdmin(actor, current.projectId, repositories)
             if (repositories.ticketTypes.isUsed(current.id)) {
                 throw ConflictFailure("Ticket type is used by existing tickets.")
             }
@@ -509,7 +603,7 @@ class WorkflowService(
 ) {
     fun save(actor: User, projectId: String, command: SaveWorkflowCommand): Workflow =
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
+            AuthorizationPolicies.requireProjectAdmin(actor, projectId, repositories)
             val project = requireProject(actor, projectId)
             val statuses = normalizeStatuses(command.statuses, ::id)
             val statusIds = statuses.map { it.id }.toSet()
@@ -544,6 +638,7 @@ class TicketService(
 ) {
     fun create(actor: User, command: CreateTicketCommand): Ticket {
         val ticket = transactions.inTransaction {
+            AuthorizationPolicies.requireProjectAccess(actor, command.projectId, repositories)
             val project = repositories.projects.findByIdForUpdate(actor.organizationId, command.projectId)
                 ?: throw NotFoundFailure("Project not found.")
             if (project.archived) {
@@ -553,7 +648,7 @@ class TicketService(
             val statusId = command.statusId?.takeIf { it.isNotBlank() } ?: workflow.statuses.first().id
             requireStatus(workflow, statusId)
             val type = requireTicketTypeForProject(actor, command.typeId, project.id)
-            requireAssignee(actor, command.assigneeId)
+            requireAssignee(actor, command.assigneeId, project.id)
             val timestamp = now()
             val ticket = Ticket(
                 id = id("ticket"),
@@ -616,10 +711,10 @@ class TicketService(
                 estimate = if (command.clearEstimate) null else command.estimate?.let(::normalizeEstimate)
                     ?: current.estimate
             )
-            if (candidate.assigneeId != current.assigneeId) requireAssignee(actor, candidate.assigneeId)
+            if (candidate.assigneeId != current.assigneeId) requireAssignee(actor, candidate.assigneeId, project.id)
             if (targetStatusId != current.statusId) {
                 val workflow = requireWorkflow(actor, project.id)
-                when (transitionEvaluator.resolve(workflow, candidate, targetStatusId, actor.role)) {
+                when (transitionEvaluator.resolve(workflow, candidate, targetStatusId, effectiveProjectRole(actor, project.id))) {
                     WorkflowTransitionResolution.Allowed -> Unit
                     WorkflowTransitionResolution.Unchanged -> Unit
                     WorkflowTransitionResolution.MissingStatus -> throw NotFoundFailure("Workflow status not found.")
@@ -676,7 +771,6 @@ class TicketService(
             if (!command.clearAssignee && assigneeId == null && command.priority == null) {
                 throw BadRequestFailure("Bulk update needs an assignee or priority change.")
             }
-            requireAssignee(actor, assigneeId)
             val currentTickets = refs.map { ref ->
                 val ticket = requireTicket(actor, ref.id)
                 requireVersion(ticket, ref.expectedVersion)
@@ -684,6 +778,9 @@ class TicketService(
                     throw ConflictFailure("Archived project tickets cannot be edited.")
                 }
                 ticket
+            }
+            if (assigneeId != null) {
+                currentTickets.map { it.projectId }.distinct().forEach { requireAssignee(actor, assigneeId, it) }
             }
             val timestamp = now()
             currentTickets.map { ticket ->
@@ -716,7 +813,7 @@ class TicketService(
                 throw ConflictFailure("Archived project tickets cannot move.")
             }
             val workflow = requireWorkflow(actor, project.id)
-            when (transitionEvaluator.resolve(workflow, current, command.toStatusId, actor.role)) {
+            when (transitionEvaluator.resolve(workflow, current, command.toStatusId, effectiveProjectRole(actor, project.id))) {
                 WorkflowTransitionResolution.Allowed -> Unit
                 WorkflowTransitionResolution.Unchanged -> return@inTransaction current
                 WorkflowTransitionResolution.MissingStatus -> throw NotFoundFailure("Workflow status not found.")
@@ -769,8 +866,8 @@ class TicketService(
 
     fun delete(actor: User, ticketId: String, expectedVersion: Long) {
         val ticket = transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
             val current = requireTicket(actor, ticketId)
+            AuthorizationPolicies.requireProjectAdmin(actor, current.projectId, repositories)
             requireVersion(current, expectedVersion)
             val timestamp = now()
             current.copy(
@@ -790,8 +887,9 @@ class TicketService(
 
     fun restore(actor: User, ticketId: String, command: RestoreTicketCommand): Ticket {
         val ticket = transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
-            val current = requireDeletedTicket(actor, ticketId)
+            val deleted = requireDeletedTicket(actor, ticketId)
+            AuthorizationPolicies.requireProjectAdmin(actor, deleted.projectId, repositories)
+            val current = deleted
             requireVersion(current, command.expectedVersion)
             val timestamp = now()
             current.copy(
@@ -857,9 +955,9 @@ class TicketService(
     fun restoreRevision(actor: User, ticketId: String, version: Long, command: RestoreTicketCommand): Ticket {
         var wasDeleted = false
         val restored = transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
             val current = repositories.tickets.findIncludingDeletedForUpdate(actor.organizationId, ticketId)
                 ?: throw NotFoundFailure("Ticket not found.")
+            AuthorizationPolicies.requireProjectAdmin(actor, current.projectId, repositories)
             requireVersion(current, command.expectedVersion)
             val revision = repositories.tickets.findRevision(actor.organizationId, ticketId, version)
                 ?: throw NotFoundFailure("Ticket revision not found.")
@@ -924,6 +1022,7 @@ class TicketService(
 
     private fun requireProject(actor: User, projectId: String): Project =
         repositories.projects.findById(actor.organizationId, projectId)
+            ?.also { AuthorizationPolicies.requireProjectAccess(actor, it.id, repositories) }
             ?: throw NotFoundFailure("Project not found.")
 
     private fun requireWorkflow(actor: User, projectId: String): Workflow =
@@ -936,23 +1035,29 @@ class TicketService(
 
     private fun requireTicket(actor: User, ticketId: String): Ticket =
         repositories.tickets.findById(actor.organizationId, ticketId)
+            ?.also { AuthorizationPolicies.requireProjectAccess(actor, it.projectId, repositories) }
             ?: throw NotFoundFailure("Ticket not found.")
 
     private fun requireDeletedTicket(actor: User, ticketId: String): Ticket =
         repositories.tickets.findDeletedById(actor.organizationId, ticketId)
+            ?.also { AuthorizationPolicies.requireProjectAccess(actor, it.projectId, repositories) }
             ?: throw NotFoundFailure("Deleted ticket not found.")
 
     private fun requireTicketTypeForProject(actor: User, typeId: String, projectId: String): TicketType =
         repositories.ticketTypes.findForProject(actor.organizationId, projectId, typeId)
             ?: throw NotFoundFailure("Ticket type not found.")
 
-    private fun requireAssignee(actor: User, assigneeId: String?) {
+    private fun requireAssignee(actor: User, assigneeId: String?, projectId: String) {
         if (assigneeId.isNullOrBlank()) return
         val assignee = repositories.users.findById(actor.organizationId, assigneeId)
-        if (assignee?.active != true) {
+        val membership = repositories.projectMemberships.find(actor.organizationId, projectId, assigneeId)
+        if (assignee?.active != true || membership == null) {
             throw NotFoundFailure("Assignee not found.")
         }
     }
+
+    private fun effectiveProjectRole(actor: User, projectId: String): ProjectRole =
+        AuthorizationPolicies.requireProjectAccess(actor, projectId, repositories)
 
     private fun validateRestoreUser(actor: User, userId: String?, label: String) {
         if (userId == null) return
@@ -1050,7 +1155,7 @@ class SavedTicketFilterService(
                 if (criteria.statusId.isNotBlank()) requireStatus(requireWorkflow(actor, projectId), criteria.statusId)
                 if (criteria.typeId.isNotBlank()) requireTicketTypeForProject(actor, criteria.typeId, projectId)
                 if (criteria.assigneeId.isNotBlank() && criteria.assigneeId != "unassigned") {
-                    requireAssignee(actor, criteria.assigneeId)
+                    requireAssignee(actor, criteria.assigneeId, projectId)
                 }
                 criteria.copy(
                     projectId = null,
@@ -1116,6 +1221,7 @@ class SavedTicketFilterService(
 
     private fun requireProject(actor: User, projectId: String): Project =
         repositories.projects.findById(actor.organizationId, projectId)
+            ?.also { AuthorizationPolicies.requireProjectAccess(actor, it.id, repositories) }
             ?: throw NotFoundFailure("Project not found.")
 
     private fun requireWorkflow(actor: User, projectId: String): Workflow =
@@ -1131,8 +1237,10 @@ class SavedTicketFilterService(
             ?: throw NotFoundFailure("Ticket type not found.")
     }
 
-    private fun requireAssignee(actor: User, assigneeId: String) {
-        if (repositories.users.findById(actor.organizationId, assigneeId)?.active != true) {
+    private fun requireAssignee(actor: User, assigneeId: String, projectId: String) {
+        val active = repositories.users.findById(actor.organizationId, assigneeId)?.active == true
+        val membership = repositories.projectMemberships.find(actor.organizationId, projectId, assigneeId)
+        if (!active || membership == null) {
             throw NotFoundFailure("Assignee not found.")
         }
     }

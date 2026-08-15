@@ -9,7 +9,7 @@ import {
 } from '../core/api.models';
 
 export type WorkspaceTab = 'board' | 'dashboard' | 'list' | 'my-tickets' | 'detail' | 'admin';
-export type AdminPage = 'overview' | 'users' | 'projects' | 'configuration' | 'integrations' | 'trash';
+export type AdminPage = 'overview' | 'users' | 'projects' | 'configuration' | 'members' | 'integrations' | 'trash';
 export type DetailReturnTab = Exclude<WorkspaceTab, 'detail'>;
 export type TicketSort = 'number' | 'title' | 'priority' | 'status' | 'updated';
 export type MyTicketsSort = Exclude<TicketSort, 'status'>;

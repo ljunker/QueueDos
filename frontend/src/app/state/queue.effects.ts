@@ -86,7 +86,8 @@ export class QueueEffects {
   readonly syncNonAdminFallback$ = createEffect(
     () => this.actions$.pipe(
       ofType(QueueActions.bootstrapSucceeded),
-      filter(({data}) => data.currentUser.role !== 'ADMIN'),
+      filter(({data}) => data.currentUser.systemRole !== 'SYSTEM_ADMIN' &&
+        !data.projectMemberships.some((item) => item.userId === data.currentUser.id && item.role === 'ADMIN')),
       debounceTime(0),
       withLatestFrom(this.store.select(selectUrlQueryParams)),
       tap(([, queryParams]) => {
@@ -313,6 +314,48 @@ export class QueueEffects {
         this.api.updateProject(projectId, request).pipe(
           map(() => QueueActions.mutationSucceeded({message: 'Project updated.'})),
           catchError((error: unknown) => of(QueueActions.mutationFailed({error: errorMessage(error, 'Project could not be updated.')})))
+        )
+      )
+    )
+  );
+
+  readonly searchProjectMembers$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.projectMemberSearchRequested),
+      switchMap(({projectId, query}) =>
+        this.api.projectMemberCandidates(projectId, query).pipe(
+          map((users) => QueueActions.projectMemberSearchSucceeded({users})),
+          catchError((error: unknown) => of(QueueActions.mutationFailed({
+            error: errorMessage(error, 'Users could not be searched.')
+          })))
+        )
+      )
+    )
+  );
+
+  readonly saveProjectMembership$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.projectMembershipSaveRequested),
+      concatMap(({projectId, userId, role}) =>
+        this.api.saveProjectMembership(projectId, userId, {role}).pipe(
+          map(() => QueueActions.mutationSucceeded({message: 'Project membership saved.'})),
+          catchError((error: unknown) => of(QueueActions.mutationFailed({
+            error: errorMessage(error, 'Project membership could not be saved.')
+          })))
+        )
+      )
+    )
+  );
+
+  readonly deleteProjectMembership$ = createEffect(() =>
+    this.actions$.pipe(
+      ofType(QueueActions.projectMembershipDeleteRequested),
+      concatMap(({projectId, userId}) =>
+        this.api.deleteProjectMembership(projectId, userId).pipe(
+          map(() => QueueActions.mutationSucceeded({message: 'Project membership removed.'})),
+          catchError((error: unknown) => of(QueueActions.mutationFailed({
+            error: errorMessage(error, 'Project membership could not be removed.')
+          })))
         )
       )
     )

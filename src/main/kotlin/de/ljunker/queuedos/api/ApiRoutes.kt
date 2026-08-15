@@ -210,6 +210,23 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 call.respond(HttpStatusCode.NoContent)
             }
 
+            get("/api/projects/{id}/member-candidates") {
+                val query = call.request.queryParameters["q"].orEmpty()
+                call.respond(services.projectMemberships.candidates(call.actor(), call.pathId(), query).map { it.toResponse() })
+            }
+
+            put("/api/projects/{id}/members/{userId}") {
+                val userId = call.parameters["userId"] ?: throw BadRequestFailure("Missing user id.")
+                val request = call.receive<UpdateProjectMembershipRequest>()
+                call.respond(services.projectMemberships.save(call.actor(), call.pathId(), userId, request.role).toResponse())
+            }
+
+            delete("/api/projects/{id}/members/{userId}") {
+                val userId = call.parameters["userId"] ?: throw BadRequestFailure("Missing user id.")
+                services.projectMemberships.delete(call.actor(), call.pathId(), userId)
+                call.respond(HttpStatusCode.NoContent)
+            }
+
             post("/api/users") {
                 call.respond(
                     HttpStatusCode.Created,

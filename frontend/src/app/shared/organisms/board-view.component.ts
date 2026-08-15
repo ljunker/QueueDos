@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
 
-import { PublicUser, Role, Ticket, TicketType, Workflow, WorkflowStatus } from '../../core/api.models';
+import {ProjectRole, PublicUser, Ticket, TicketType, Workflow, WorkflowStatus} from '../../core/api.models';
 import { statusRank, typeById, userById } from '../../state/queue.selectors';
 import { TicketCardComponent } from '../molecules/ticket-card.component';
 
@@ -49,7 +49,7 @@ export class BoardViewComponent {
   readonly tickets = input<Ticket[]>([]);
   readonly types = input<TicketType[]>([]);
   readonly users = input<PublicUser[]>([]);
-  readonly currentRole = input<Role>('MEMBER');
+  readonly currentRole = input<ProjectRole>('MEMBER');
 
   readonly ticketOpened = output<string>();
   readonly ticketTransitioned = output<{ ticket: Ticket; toStatusId: string }>();
@@ -92,7 +92,8 @@ export class BoardViewComponent {
       return (
         (transition.globalTransition || transition.fromStatusId === ticket.statusId) &&
         transition.toStatusId === toStatusId &&
-        transition.allowedRoles.includes(this.currentRole()) &&
+        (transition.allowedRoles.includes(this.currentRole()) ||
+          (this.currentRole() === 'ADMIN' && transition.allowedRoles.includes('MEMBER'))) &&
         (!backward || transition.allowBackward !== false)
       );
     });

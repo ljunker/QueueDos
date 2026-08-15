@@ -7,7 +7,7 @@ class WorkflowTransitionEvaluator {
         workflow: Workflow,
         ticket: Ticket,
         targetStatusId: String,
-        actorRole: Role
+        actorRole: ProjectRole
     ): WorkflowTransitionResolution {
         if (workflow.statuses.none { it.id == targetStatusId }) {
             return WorkflowTransitionResolution.MissingStatus
@@ -18,7 +18,9 @@ class WorkflowTransitionEvaluator {
         val transition = workflow.transitions.firstOrNull {
             (it.globalTransition || it.fromStatusId == ticket.statusId) && it.toStatusId == targetStatusId
         } ?: return WorkflowTransitionResolution.NotAllowed
-        if (actorRole !in transition.allowedRoles) {
+        val roleAllowed = actorRole in transition.allowedRoles ||
+            (actorRole == ProjectRole.ADMIN && ProjectRole.MEMBER in transition.allowedRoles)
+        if (!roleAllowed) {
             return WorkflowTransitionResolution.RoleDenied
         }
         if (isBackwardTransition(workflow, ticket.statusId, targetStatusId) && !transition.allowBackward) {

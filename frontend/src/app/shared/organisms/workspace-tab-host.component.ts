@@ -9,6 +9,8 @@ import {
   CreateUserRequest,
   Priority,
   Project,
+  ProjectMembership,
+  ProjectRole,
   PublicUser,
   SavedTicketFilter,
   SavedTicketFilterView,
@@ -63,7 +65,7 @@ import {TicketListViewComponent} from './ticket-list-view.component';
             [tickets]="projectTickets()"
             [types]="projectTypes()"
             [users]="users()"
-            [currentRole]="currentUser()?.role ?? 'MEMBER'"
+            [currentRole]="currentProjectRole()"
             (ticketOpened)="ticketOpened.emit($event)"
             (ticketTransitioned)="ticketTransitioned.emit($event)"
             (transitionDenied)="transitionDenied.emit()" />
@@ -136,7 +138,7 @@ import {TicketListViewComponent} from './ticket-list-view.component';
             (commentSubmitted)="commentSubmitted.emit({ ticketId: $event.ticketId, request: { body: $event.body } })" />
         }
         @case ('admin') {
-          @if (isAdmin()) {
+          @if (canUseAdmin()) {
             <qd-admin-view
               [activePage]="activeAdminPage()"
               [projects]="projects()"
@@ -146,6 +148,9 @@ import {TicketListViewComponent} from './ticket-list-view.component';
               [activityHooks]="data()?.activityHooks ?? []"
               [users]="users()"
               [currentUser]="currentUser()"
+              [isSystemAdmin]="isSystemAdmin()"
+              [projectMemberships]="projectMemberships()"
+              [memberCandidates]="memberCandidates()"
               [projectTypes]="projectTypes()"
               [workflowDraft]="workflowDraft()"
               (pageSelected)="adminPageSelected.emit($event)"
@@ -156,6 +161,9 @@ import {TicketListViewComponent} from './ticket-list-view.component';
               (userCreated)="userCreated.emit($event)"
               (userUpdated)="userUpdated.emit($event)"
               (temporaryPasswordRequested)="temporaryPasswordRequested.emit($event)"
+              (memberSearchRequested)="memberSearchRequested.emit($event)"
+              (membershipSaved)="membershipSaved.emit($event)"
+              (membershipDeleted)="membershipDeleted.emit($event)"
               (ticketTypeCreated)="ticketTypeCreated.emit($event)"
               (ticketTypeUpdated)="ticketTypeUpdated.emit($event)"
               (ticketTypeDeleted)="ticketTypeDeleted.emit($event)"
@@ -182,11 +190,16 @@ export class WorkspaceTabHostComponent {
   readonly activeTab = input<WorkspaceTab>('board');
   readonly activeAdminPage = input<AdminPage>('overview');
   readonly isAdmin = input(false);
+  readonly canUseAdmin = input(false);
+  readonly isSystemAdmin = input(false);
+  readonly currentProjectRole = input<ProjectRole>('MEMBER');
   readonly projects = input<Project[]>([]);
   readonly selectedProject = input<Project | null>(null);
   readonly currentUser = input<PublicUser | null>(null);
   readonly users = input<PublicUser[]>([]);
   readonly activeUsers = input<PublicUser[]>([]);
+  readonly projectMemberships = input<ProjectMembership[]>([]);
+  readonly memberCandidates = input<PublicUser[]>([]);
   readonly workflow = input<Workflow | null>(null);
   readonly statuses = input<WorkflowStatus[]>([]);
   readonly projectTickets = input<Ticket[]>([]);
@@ -228,6 +241,9 @@ export class WorkspaceTabHostComponent {
   readonly userCreated = output<{request: CreateUserRequest; generateTemporaryPassword: boolean}>();
   readonly userUpdated = output<{ userId: string; request: UpdateUserRequest }>();
   readonly temporaryPasswordRequested = output<PublicUser>();
+  readonly memberSearchRequested = output<{projectId: string; query: string}>();
+  readonly membershipSaved = output<{projectId: string; userId: string; role: ProjectRole}>();
+  readonly membershipDeleted = output<{projectId: string; userId: string}>();
   readonly ticketTypeCreated = output<CreateTicketTypeRequest>();
   readonly ticketTypeUpdated = output<{typeId: string; request: UpdateTicketTypeRequest}>();
   readonly ticketTypeDeleted = output<string>();

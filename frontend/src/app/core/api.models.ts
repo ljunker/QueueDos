@@ -1,4 +1,5 @@
-export type Role = 'ADMIN' | 'MEMBER';
+export type SystemRole = 'SYSTEM_ADMIN' | 'USER';
+export type ProjectRole = 'ADMIN' | 'MEMBER';
 export type Priority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
 export interface ApiError {
@@ -17,7 +18,7 @@ export interface PublicUser {
   organizationId: string;
   email: string;
   displayName: string;
-  role: Role;
+  systemRole: SystemRole;
   active: boolean;
   localLoginEnabled: boolean;
   mustChangePassword: boolean;
@@ -32,6 +33,12 @@ export interface Project {
   color: string;
   nextTicketNumber: number;
   archived: boolean;
+}
+
+export interface ProjectMembership {
+  projectId: string;
+  userId: string;
+  role: ProjectRole;
 }
 
 export interface TicketType {
@@ -54,7 +61,7 @@ export interface WorkflowTransition {
   id: string;
   fromStatusId: string | null;
   toStatusId: string;
-  allowedRoles: Role[];
+  allowedRoles: ProjectRole[];
   requiredFields: string[];
   globalTransition: boolean;
   allowBackward: boolean;
@@ -219,6 +226,7 @@ export interface BootstrapResponse {
   organizations: Organization[];
   users: PublicUser[];
   projects: Project[];
+  projectMemberships: ProjectMembership[];
   ticketTypes: TicketType[];
   workflows: Workflow[];
   tickets: Ticket[];
@@ -275,15 +283,19 @@ export interface UpdateProjectRequest {
 export interface CreateUserRequest {
   email: string;
   displayName: string;
-  role: Role;
+  systemRole: SystemRole;
   password?: string;
 }
 
 export interface UpdateUserRequest {
   displayName?: string;
-  role?: Role;
+  systemRole?: SystemRole;
   active?: boolean;
   password?: string;
+}
+
+export interface UpdateProjectMembershipRequest {
+  role: ProjectRole;
 }
 
 export interface CreateTicketTypeRequest {

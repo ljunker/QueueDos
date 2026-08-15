@@ -18,6 +18,7 @@ class JdbcQueueRepositories(
             organizations = JdbcOrganizationRepository(transactionRunner),
             users = JdbcUserRepository(transactionRunner),
             projects = JdbcProjectRepository(transactionRunner),
+            projectMemberships = JdbcProjectMembershipRepository(transactionRunner),
             ticketTypes = JdbcTicketTypeRepository(transactionRunner),
             workflows = JdbcWorkflowRepository(transactionRunner),
             tickets = JdbcTicketRepository(transactionRunner, json),
@@ -131,7 +132,7 @@ private class JdbcUserRepository(
             user.organizationId,
             user.email,
             user.displayName,
-            user.role.name,
+            user.systemRole.name,
             user.active,
             user.passwordSalt,
             user.passwordHash,
@@ -153,7 +154,7 @@ private class JdbcUserRepository(
             user.organizationId,
             user.email,
             user.displayName,
-            user.role.name,
+            user.systemRole.name,
             user.active,
             user.passwordSalt,
             user.passwordHash,
@@ -161,12 +162,12 @@ private class JdbcUserRepository(
             user.mustChangePassword
         ) == 1
 
-    override fun countActiveAdminsForUpdate(organizationId: String): Int =
+    override fun countActiveSystemAdminsForUpdate(organizationId: String): Int =
         connection().query(
             """
             SELECT id
             FROM queuedos_users
-            WHERE organization_id = ? AND role = 'ADMIN' AND active = true
+            WHERE organization_id = ? AND role = 'SYSTEM_ADMIN' AND active = true
             ORDER BY id
             FOR UPDATE
             """.trimIndent(),
@@ -183,7 +184,7 @@ private class JdbcUserRepository(
             """.trimIndent(),
             user.email,
             user.displayName,
-            user.role.name,
+            user.systemRole.name,
             user.active,
             user.passwordSalt,
             user.passwordHash,
@@ -193,6 +194,90 @@ private class JdbcUserRepository(
             user.organizationId
         )
     }
+
+    private fun connection() = transactions.connection()
+}
+
+private class JdbcProjectMembershipRepository(
+    private val transactions: JdbcTransactionRunner
+) : ProjectMembershipRepository {
+    override fun listByOrganization(organizationId: String): List<ProjectMembership> =
+        connection().query(
+            """
+            SELECT membership.project_id, membership.user_id, membership.role
+            FROM queuedos_project_memberships membership
+            JOIN queuedos_projects project ON project.id = membership.project_id
+            WHERE project.organization_id = ?
+            ORDER BY membership.project_id, membership.user_id
+            """.trimIndent(),
+            organizationId
+        ) { membership(it) }
+
+    override fun listByProject(organizationId: String, projectId: String): List<ProjectMembership> =
+        connection().query(
+            """
+            SELECT membership.project_id, membership.user_id, membership.role
+            FROM queuedos_project_memberships membership
+            JOIN queuedos_projects project ON project.id = membership.project_id
+            WHERE project.organization_id = ? AND membership.project_id = ?
+            ORDER BY membership.user_id
+            """.trimIndent(),
+            organizationId,
+            projectId
+        ) { membership(it) }
+
+    override fun listByUser(organizationId: String, userId: String): List<ProjectMembership> =
+        connection().query(
+            """
+            SELECT membership.project_id, membership.user_id, membership.role
+            FROM queuedos_project_memberships membership
+            JOIN queuedos_projects project ON project.id = membership.project_id
+            WHERE project.organization_id = ? AND membership.user_id = ?
+            ORDER BY membership.project_id
+            """.trimIndent(),
+            organizationId,
+            userId
+        ) { membership(it) }
+
+    override fun find(organizationId: String, projectId: String, userId: String): ProjectMembership? =
+        connection().queryOne(
+            """
+            SELECT membership.project_id, membership.user_id, membership.role
+            FROM queuedos_project_memberships membership
+            JOIN queuedos_projects project ON project.id = membership.project_id
+            WHERE project.organization_id = ? AND membership.project_id = ? AND membership.user_id = ?
+            """.trimIndent(),
+            organizationId,
+            projectId,
+            userId
+        ) { membership(it) }
+
+    override fun upsert(membership: ProjectMembership) {
+        connection().execute(
+            """
+            INSERT INTO queuedos_project_memberships (project_id, user_id, role)
+            VALUES (?, ?, ?)
+            ON CONFLICT (project_id, user_id) DO UPDATE SET role = excluded.role
+            """.trimIndent(),
+            membership.projectId,
+            membership.userId,
+            membership.role.name
+        )
+    }
+
+    override fun delete(projectId: String, userId: String) {
+        connection().execute(
+            "DELETE FROM queuedos_project_memberships WHERE project_id = ? AND user_id = ?",
+            projectId,
+            userId
+        )
+    }
+
+    private fun membership(result: ResultSet) = ProjectMembership(
+        projectId = result.getString("project_id"),
+        userId = result.getString("user_id"),
+        role = ProjectRole.valueOf(result.getString("role"))
+    )
 
     private fun connection() = transactions.connection()
 }
@@ -464,7 +549,7 @@ private class JdbcWorkflowRepository(
             )
         }
 
-    private fun transitionRoles(workflowId: String, transitionId: String): List<Role> =
+    private fun transitionRoles(workflowId: String, transitionId: String): List<ProjectRole> =
         connection().query(
             """
             SELECT role FROM queuedos_workflow_transition_roles
@@ -473,7 +558,7 @@ private class JdbcWorkflowRepository(
             """.trimIndent(),
             workflowId,
             transitionId
-        ) { Role.valueOf(it.getString("role")) }
+        ) { ProjectRole.valueOf(it.getString("role")) }
 
     private fun transitionFields(workflowId: String, transitionId: String): List<String> =
         connection().query(
@@ -747,6 +832,38 @@ private class JdbcTicketRepository(
                 userId
             )
         }
+    }
+
+    override fun referencedUserIds(organizationId: String, projectIds: Set<String>): Set<String> {
+        if (projectIds.isEmpty()) return emptySet()
+        val placeholders = projectIds.joinToString(",") { "?" }
+        val parameters = (listOf<Any?>(organizationId) + projectIds.sorted()).toTypedArray()
+        return connection().query(
+            """
+            WITH visible_tickets AS (
+                SELECT id, reporter_id, assignee_id, deleted_by_id
+                FROM queuedos_tickets
+                WHERE organization_id = ? AND project_id IN ($placeholders)
+            )
+            SELECT reporter_id AS user_id FROM visible_tickets
+            UNION SELECT assignee_id FROM visible_tickets WHERE assignee_id IS NOT NULL
+            UNION SELECT deleted_by_id FROM visible_tickets WHERE deleted_by_id IS NOT NULL
+            UNION SELECT commitment.user_id
+                  FROM queuedos_ticket_commitments commitment
+                  JOIN visible_tickets ticket ON ticket.id = commitment.ticket_id
+            UNION SELECT comment.author_id
+                  FROM queuedos_ticket_comments comment
+                  JOIN visible_tickets ticket ON ticket.id = comment.ticket_id
+            UNION SELECT change.actor_id
+                  FROM queuedos_ticket_changes change
+                  JOIN visible_tickets ticket ON ticket.id = change.ticket_id
+            UNION SELECT revision.actor_id
+                  FROM queuedos_ticket_revisions revision
+                  JOIN visible_tickets ticket ON ticket.id = revision.ticket_id
+                  WHERE revision.actor_id IS NOT NULL
+            """.trimIndent(),
+            *parameters
+        ) { it.getString("user_id") }.toSet()
     }
 
     override fun comments(organizationId: String, ticketId: String?): List<TicketComment> =
@@ -1164,7 +1281,7 @@ private fun user(result: ResultSet): User =
         organizationId = result.getString("organization_id"),
         email = result.getString("email"),
         displayName = result.getString("display_name"),
-        role = Role.valueOf(result.getString("role")),
+        systemRole = SystemRole.valueOf(result.getString("role")),
         active = result.getBoolean("active"),
         passwordSalt = result.getString("password_salt"),
         passwordHash = result.getString("password_hash"),

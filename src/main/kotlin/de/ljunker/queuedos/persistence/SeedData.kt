@@ -4,7 +4,9 @@ import de.ljunker.queuedos.domain.AppData
 import de.ljunker.queuedos.domain.Organization
 import de.ljunker.queuedos.domain.Priority
 import de.ljunker.queuedos.domain.Project
-import de.ljunker.queuedos.domain.Role
+import de.ljunker.queuedos.domain.ProjectMembership
+import de.ljunker.queuedos.domain.ProjectRole
+import de.ljunker.queuedos.domain.SystemRole
 import de.ljunker.queuedos.domain.Ticket
 import de.ljunker.queuedos.domain.TicketType
 import de.ljunker.queuedos.domain.User
@@ -21,7 +23,7 @@ internal fun seedData(now: () -> String): AppData {
         organizationId = organization.id,
         email = "admin@queuedos.local",
         displayName = "QueueDos Admin",
-        role = Role.ADMIN,
+        systemRole = SystemRole.SYSTEM_ADMIN,
         active = true,
         passwordSalt = BCRYPT_PASSWORD_MARKER,
         passwordHash = hashPassword("admin")
@@ -31,7 +33,7 @@ internal fun seedData(now: () -> String): AppData {
         organizationId = organization.id,
         email = "member@queuedos.local",
         displayName = "QueueDos Member",
-        role = Role.MEMBER,
+        systemRole = SystemRole.USER,
         active = true,
         passwordSalt = BCRYPT_PASSWORD_MARKER,
         passwordHash = hashPassword("member")
@@ -100,6 +102,10 @@ internal fun seedData(now: () -> String): AppData {
         organizations = listOf(organization),
         users = listOf(admin, member),
         projects = listOf(project),
+        projectMemberships = listOf(
+            ProjectMembership(project.id, admin.id, ProjectRole.ADMIN),
+            ProjectMembership(project.id, member.id, ProjectRole.MEMBER)
+        ),
         ticketTypes = ticketTypes,
         workflows = listOf(workflow),
         tickets = tickets
@@ -127,7 +133,7 @@ internal fun defaultWorkflow(organizationId: String, projectId: String): Workflo
                 id = "transition-${from.id}-${to.id}",
                 fromStatusId = from.id,
                 toStatusId = to.id,
-                allowedRoles = listOf(Role.ADMIN, Role.MEMBER)
+                allowedRoles = listOf(ProjectRole.ADMIN, ProjectRole.MEMBER)
             )
         }
     }

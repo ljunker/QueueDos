@@ -45,7 +45,7 @@ object LegacySnapshotImporter {
                 statement.setString(2, it.organizationId)
                 statement.setString(3, it.email)
                 statement.setString(4, it.displayName)
-                statement.setString(5, it.role.name)
+                statement.setString(5, if (it.systemRole.name == "SYSTEM_ADMIN") "ADMIN" else "MEMBER")
                 statement.setBoolean(6, it.active)
                 statement.setString(7, it.passwordSalt)
                 statement.setString(8, it.passwordHash)

@@ -37,7 +37,7 @@ import { AdminPage, WorkspaceTab } from '../../state/queue.models';
           <button type="button" class="tab" [class.active]="activeTab() === 'admin'" (click)="tabSelected.emit('admin')">Admin</button>
           @if (activeTab() === 'admin') {
             <div class="admin-subnav" aria-label="Admin pages">
-              @for (item of adminItems; track item.page) {
+              @for (item of adminItems(); track item.page) {
                 <button
                   type="button"
                   class="admin-subtab"
@@ -54,7 +54,7 @@ import { AdminPage, WorkspaceTab } from '../../state/queue.models';
       <div class="sidebar-footer">
         <div class="sidebar-meta">
           @if (user(); as currentUser) {
-            <span>{{ currentUser.displayName }} ({{ roleLabel(currentUser.role) }})</span>
+            <span>{{ currentUser.displayName }} ({{ roleLabel(currentUser.systemRole) }})</span>
           }
           <span class="app-version">{{ applicationVersionLabel }}</span>
         </div>
@@ -71,6 +71,7 @@ export class SidebarComponent {
   readonly activeTab = input<WorkspaceTab>('board');
   readonly activeAdminPage = input<AdminPage>('overview');
   readonly isAdmin = input(false);
+  readonly isSystemAdmin = input(false);
 
   readonly projectSelected = output<string>();
   readonly tabSelected = output<WorkspaceTab>();
@@ -79,13 +80,17 @@ export class SidebarComponent {
 
   protected readonly roleLabel = roleLabel;
   protected readonly applicationVersionLabel = APPLICATION_VERSION_LABEL;
-  protected readonly adminItems: {page: Exclude<AdminPage, 'overview'>; label: string}[] = [
-    {page: 'users', label: 'Users'},
-    {page: 'projects', label: 'Projects'},
-    {page: 'configuration', label: 'Project configuration'},
-    {page: 'integrations', label: 'Integrations'},
-    {page: 'trash', label: 'Trash'}
-  ];
+  protected adminItems(): {page: Exclude<AdminPage, 'overview'>; label: string}[] {
+    const projectItems: {page: Exclude<AdminPage, 'overview'>; label: string}[] = [
+      {page: 'projects', label: 'Projects'},
+      {page: 'configuration', label: 'Project configuration'},
+      {page: 'members', label: 'Project members'},
+      {page: 'trash', label: 'Trash'}
+    ];
+    return this.isSystemAdmin()
+      ? [{page: 'users', label: 'Users'}, ...projectItems, {page: 'integrations', label: 'Integrations'}]
+      : projectItems;
+  }
 
   protected valueOf(event: Event): string {
     return (event.target as HTMLSelectElement).value;

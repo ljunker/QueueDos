@@ -3,6 +3,13 @@ package db.migration
 import de.ljunker.queuedos.domain.AppData
 import de.ljunker.queuedos.persistence.LegacySnapshotImporter
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.decodeFromJsonElement
 import org.flywaydb.core.api.migration.BaseJavaMigration
 import org.flywaydb.core.api.migration.Context
 
@@ -22,7 +29,20 @@ class V2__import_legacy_snapshot : BaseJavaMigration() {
                     if (result.next()) result.getString(1) else null
                 }
             } ?: return
-        LegacySnapshotImporter.insert(connection, json.decodeFromString<AppData>(state), json)
+        val root = json.parseToJsonElement(state).jsonObject
+        val migratedUsers = root["users"]?.jsonArray?.map { element ->
+            val user = element.jsonObject
+            val legacyRole = user["role"]?.jsonPrimitive?.content
+            val currentRole = user["systemRole"]?.jsonPrimitive?.content
+            JsonObject(
+                user.filterKeys { it != "role" && it != "systemRole" } +
+                    ("systemRole" to JsonPrimitive(
+                        currentRole ?: if (legacyRole == "ADMIN") "SYSTEM_ADMIN" else "USER"
+                    ))
+            )
+        } ?: emptyList()
+        val compatibleState = JsonObject(root + ("users" to JsonArray(migratedUsers)))
+        LegacySnapshotImporter.insert(connection, json.decodeFromJsonElement<AppData>(compatibleState), json)
     }
 
     private fun java.sql.Connection.organizationsExist(): Boolean =

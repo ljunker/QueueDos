@@ -21,7 +21,7 @@ class QueueDosServicesTest {
 
         val response = services.auth.login(LoginCommand("admin@queuedos.local", "admin"))
 
-        assertEquals(Role.ADMIN, response.user.role)
+        assertEquals(SystemRole.SYSTEM_ADMIN, response.user.systemRole)
     }
 
     @Test
@@ -73,6 +73,70 @@ class QueueDosServicesTest {
     }
 
     @Test
+    fun projectMembershipsHideProjectsAndGrantScopedAdministration() {
+        val services = newServices()
+        val systemAdmin = admin(services)
+        val user = services.auth.login(LoginCommand("member@queuedos.local", "member")).user
+        val project = services.projects.create(systemAdmin, CreateProjectCommand("SEC", "Secret", ""))
+        val type = services.queries.bootstrap(systemAdmin).ticketTypes.first { it.projectId == project.id }
+        val ticket = services.tickets.create(
+            systemAdmin,
+            CreateTicketCommand(project.id, "Hidden work", "", type.id, Priority.MEDIUM, null, null, emptyList(), null, null)
+        )
+
+        assertTrue(services.queries.bootstrap(user).projects.none { it.id == project.id })
+        assertEquals(FailureKind.NOT_FOUND, assertFailsWith<QueueDosFailure> {
+            services.queries.ticketDetail(user, ticket.id)
+        }.kind)
+
+        services.projectMemberships.save(systemAdmin, project.id, user.id, ProjectRole.MEMBER)
+        assertTrue(services.queries.bootstrap(user).projects.any { it.id == project.id })
+        assertEquals(FailureKind.FORBIDDEN, assertFailsWith<QueueDosFailure> {
+            services.projects.update(user, project.id, UpdateProjectCommand(null, "Denied", null, null))
+        }.kind)
+
+        services.projectMemberships.save(systemAdmin, project.id, user.id, ProjectRole.ADMIN)
+        assertEquals("Allowed", services.projects.update(
+            user,
+            project.id,
+            UpdateProjectCommand(null, "Allowed", null, null)
+        ).name)
+        assertEquals(FailureKind.FORBIDDEN, assertFailsWith<QueueDosFailure> {
+            services.projects.delete(user, project.id)
+        }.kind)
+
+        services.projectMemberships.delete(user, project.id, user.id)
+        assertTrue(services.queries.bootstrap(user).projects.none { it.id == project.id })
+    }
+
+    @Test
+    fun assigneesMustBeActiveProjectMembersAndRemovedReferencesRemain() {
+        val services = newServices()
+        val systemAdmin = admin(services)
+        val project = services.projects.create(systemAdmin, CreateProjectCommand("TEAM", "Team", ""))
+        val type = services.queries.bootstrap(systemAdmin).ticketTypes.first { it.projectId == project.id }
+        val user = services.users.create(
+            systemAdmin,
+            CreateUserCommand("team@example.com", "Team User", SystemRole.USER, "team-password")
+        )
+        val command = CreateTicketCommand(
+            project.id, "Assigned work", "", type.id, Priority.MEDIUM, user.id, null, emptyList(), null, null
+        )
+
+        assertEquals(FailureKind.NOT_FOUND, assertFailsWith<QueueDosFailure> {
+            services.tickets.create(systemAdmin, command)
+        }.kind)
+        services.projectMemberships.save(systemAdmin, project.id, user.id, ProjectRole.MEMBER)
+        val ticket = services.tickets.create(systemAdmin, command)
+        services.projectMemberships.delete(systemAdmin, project.id, user.id)
+
+        assertEquals(user.id, services.queries.ticketDetail(systemAdmin, ticket.id).ticket.assigneeId)
+        assertEquals(FailureKind.NOT_FOUND, assertFailsWith<QueueDosFailure> {
+            services.queries.ticketDetail(user, ticket.id)
+        }.kind)
+    }
+
+    @Test
     fun projectWizardConfigurationIsCreatedAtomically() {
         val services = newServices()
         val admin = admin(services)
@@ -104,7 +168,7 @@ class QueueDosServicesTest {
         assertEquals(listOf("Incoming", "Investigating", "Resolved"), workflow.statuses.map { it.name })
         assertEquals(listOf("TODO", "IN_PROGRESS", "DONE"), workflow.statuses.map { it.category })
         assertEquals(6, workflow.transitions.size)
-        assertTrue(workflow.transitions.all { it.allowedRoles == listOf(Role.ADMIN, Role.MEMBER) })
+        assertTrue(workflow.transitions.all { it.allowedRoles == listOf(ProjectRole.ADMIN, ProjectRole.MEMBER) })
     }
 
     @Test
@@ -367,14 +431,14 @@ class QueueDosServicesTest {
                     WorkflowTransition(
                         id = "transition-global-done",
                         toStatusId = "status-done",
-                        allowedRoles = listOf(Role.ADMIN),
+                        allowedRoles = listOf(ProjectRole.ADMIN),
                         globalTransition = true
                     ),
                     WorkflowTransition(
                         id = "transition-done-todo",
                         fromStatusId = "status-done",
                         toStatusId = "status-todo",
-                        allowedRoles = listOf(Role.ADMIN),
+                        allowedRoles = listOf(ProjectRole.ADMIN),
                         allowBackward = false
                     )
                 )
@@ -550,7 +614,7 @@ class QueueDosServicesTest {
         val admin = admin(services)
         val user = services.users.create(
             admin,
-            CreateUserCommand("azure-only@example.com", "Azure Only", Role.MEMBER, password = null)
+            CreateUserCommand("azure-only@example.com", "Azure Only", SystemRole.USER, password = null)
         )
 
         assertFalse(user.localLoginEnabled)
@@ -586,7 +650,7 @@ class QueueDosServicesTest {
         val admin = admin(services)
         val local = services.users.create(
             admin,
-            CreateUserCommand("local@example.com", "Local User", Role.MEMBER, "initial-password")
+            CreateUserCommand("local@example.com", "Local User", SystemRole.USER, "initial-password")
         )
         assertTrue(local.localLoginEnabled)
         assertFalse(local.mustChangePassword)
@@ -594,7 +658,7 @@ class QueueDosServicesTest {
 
         val azureOnly = services.users.create(
             admin,
-            CreateUserCommand("later-local@example.com", "Later Local", Role.MEMBER, null)
+            CreateUserCommand("later-local@example.com", "Later Local", SystemRole.USER, null)
         )
         val updated = services.users.update(
             admin,
@@ -612,15 +676,15 @@ class QueueDosServicesTest {
         val firstAdmin = admin(services)
         val secondAdmin = services.users.create(
             firstAdmin,
-            CreateUserCommand("second-admin@example.com", "Second Admin", Role.ADMIN, "admin-password")
+            CreateUserCommand("second-admin@example.com", "Second Admin", SystemRole.SYSTEM_ADMIN, "admin-password")
         )
         val member = services.users.create(
             firstAdmin,
-            CreateUserCommand("disabled@example.com", "Disabled User", Role.MEMBER, "member-password")
+            CreateUserCommand("disabled@example.com", "Disabled User", SystemRole.USER, "member-password")
         )
 
         assertFailsWith<ConflictFailure> {
-            services.users.update(firstAdmin, firstAdmin.id, UpdateUserCommand(null, Role.MEMBER, null, null))
+            services.users.update(firstAdmin, firstAdmin.id, UpdateUserCommand(null, SystemRole.USER, null, null))
         }
         assertFailsWith<ConflictFailure> {
             services.users.update(firstAdmin, firstAdmin.id, UpdateUserCommand(null, null, false, null))
@@ -638,8 +702,8 @@ class QueueDosServicesTest {
         val results = try {
             executor.invokeAll(
                 listOf(
-                    Callable { runCatching { services.users.update(firstAdmin, secondAdmin.id, UpdateUserCommand(null, Role.MEMBER, null, null)) } },
-                    Callable { runCatching { services.users.update(secondAdmin, firstAdmin.id, UpdateUserCommand(null, Role.MEMBER, null, null)) } }
+                    Callable { runCatching { services.users.update(firstAdmin, secondAdmin.id, UpdateUserCommand(null, SystemRole.USER, null, null)) } },
+                    Callable { runCatching { services.users.update(secondAdmin, firstAdmin.id, UpdateUserCommand(null, SystemRole.USER, null, null)) } }
                 )
             ).map { it.get() }
         } finally {
@@ -647,7 +711,13 @@ class QueueDosServicesTest {
         }
         assertEquals(1, results.count(Result<User>::isSuccess))
         assertEquals(1, results.count(Result<User>::isFailure))
-        val activeAdmins = services.queries.bootstrap(admin(services)).users.count { it.active && it.role == Role.ADMIN }
+        val survivingAdmin = listOf(
+            services.auth.login(LoginCommand("admin@queuedos.local", "admin")).user,
+            services.auth.login(LoginCommand("second-admin@example.com", "admin-password")).user
+        ).first { it.systemRole == SystemRole.SYSTEM_ADMIN }
+        val activeAdmins = services.queries.bootstrap(survivingAdmin).users.count {
+            it.active && it.systemRole == SystemRole.SYSTEM_ADMIN
+        }
         assertEquals(1, activeAdmins)
     }
 
@@ -688,7 +758,7 @@ class QueueDosServicesTest {
         assertEquals("org-default", first.user.organizationId)
         assertEquals("new.user@example.com", first.user.email)
         assertEquals("New User", first.user.displayName)
-        assertEquals(Role.MEMBER, first.user.role)
+        assertEquals(SystemRole.USER, first.user.systemRole)
         assertTrue(first.user.active)
         assertFalse(first.user.localLoginEnabled)
         assertFalse(first.user.mustChangePassword)

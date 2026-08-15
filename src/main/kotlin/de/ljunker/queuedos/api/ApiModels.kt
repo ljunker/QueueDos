@@ -1,7 +1,8 @@
 package de.ljunker.queuedos.api
 
 import de.ljunker.queuedos.domain.Priority
-import de.ljunker.queuedos.domain.Role
+import de.ljunker.queuedos.domain.ProjectRole
+import de.ljunker.queuedos.domain.SystemRole
 import de.ljunker.queuedos.domain.SavedTicketFilterView
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
@@ -42,6 +43,7 @@ data class BootstrapResponse(
     val organizations: List<OrganizationResponse>,
     val users: List<UserResponse>,
     val projects: List<ProjectResponse>,
+    val projectMemberships: List<ProjectMembershipResponse> = emptyList(),
     val ticketTypes: List<TicketTypeResponse>,
     val workflows: List<WorkflowResponse>,
     val tickets: List<TicketResponse>,
@@ -103,7 +105,7 @@ data class UserResponse(
     val organizationId: String,
     val email: String,
     val displayName: String,
-    val role: Role,
+    val systemRole: SystemRole,
     val active: Boolean,
     val localLoginEnabled: Boolean,
     val mustChangePassword: Boolean
@@ -119,6 +121,13 @@ data class ProjectResponse(
     val color: String = "#2563eb",
     val nextTicketNumber: Int = 1,
     val archived: Boolean = false
+)
+
+@Serializable
+data class ProjectMembershipResponse(
+    val projectId: String,
+    val userId: String,
+    val role: ProjectRole
 )
 
 @Serializable
@@ -144,7 +153,7 @@ data class WorkflowTransitionDto(
     val id: String,
     val fromStatusId: String? = null,
     val toStatusId: String,
-    val allowedRoles: List<Role> = listOf(Role.ADMIN, Role.MEMBER),
+    val allowedRoles: List<ProjectRole> = listOf(ProjectRole.ADMIN, ProjectRole.MEMBER),
     val requiredFields: List<String> = emptyList(),
     val globalTransition: Boolean = false,
     val allowBackward: Boolean = true
@@ -275,7 +284,7 @@ data class UpdateProjectRequest(
 data class CreateUserRequest(
     val email: String,
     val displayName: String,
-    val role: Role = Role.MEMBER,
+    val systemRole: SystemRole = SystemRole.USER,
     val password: String? = null
 )
 
@@ -287,7 +296,7 @@ data class TemporaryPasswordResponse(
 @Serializable
 data class UpdateUserRequest(
     val displayName: String? = null,
-    val role: Role? = null,
+    val systemRole: SystemRole? = null,
     val active: Boolean? = null,
     val password: String? = null
 )
@@ -407,3 +416,6 @@ data class UpdateActivityHookRequest(
     val messageTemplate: String? = null,
     val active: Boolean? = null
 )
+
+@Serializable
+data class UpdateProjectMembershipRequest(val role: ProjectRole)

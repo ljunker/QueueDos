@@ -95,7 +95,7 @@ class ActivityHookService(
 ) {
     fun create(actor: User, command: CreateActivityHookCommand): ActivityHook =
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
+            AuthorizationPolicies.requireSystemAdmin(actor)
             ActivityHook(
                 id = "hook-${UUID.randomUUID()}",
                 organizationId = actor.organizationId,
@@ -108,7 +108,7 @@ class ActivityHookService(
 
     fun update(actor: User, hookId: String, command: UpdateActivityHookCommand): ActivityHook =
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
+            AuthorizationPolicies.requireSystemAdmin(actor)
             if (
                 command.eventType == null &&
                 command.webhookUrl == null &&
@@ -128,7 +128,7 @@ class ActivityHookService(
 
     fun delete(actor: User, hookId: String) {
         transactions.inTransaction {
-            AuthorizationPolicies.requireAdmin(actor)
+            AuthorizationPolicies.requireSystemAdmin(actor)
             repositories.activityHooks.delete(requireHook(actor, hookId).id)
         }
     }

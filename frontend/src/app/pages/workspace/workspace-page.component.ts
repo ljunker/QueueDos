@@ -22,6 +22,8 @@ import {
   selectActiveAdminPage,
   selectActiveUsers,
   selectCurrentUser,
+  selectCurrentProjectRole,
+  selectCanUseAdmin,
   selectData,
   selectDialogProject,
   selectDialogTicket,
@@ -30,6 +32,7 @@ import {
   selectError,
   selectFilters,
   selectIsAdmin,
+  selectIsSystemAdmin,
   selectLoading,
   selectMyTickets,
   selectMyTicketsFilters,
@@ -38,6 +41,8 @@ import {
   selectOrganizations,
   selectPriorities,
   selectProjectCreateError,
+  selectProjectMemberCandidates,
+  selectProjectMemberships,
   selectProjectCreating,
   selectProjects,
   selectProjectSavedTicketFilters,
@@ -102,7 +107,8 @@ import {
           [user]="currentUser()"
           [activeTab]="activeTab()"
           [activeAdminPage]="activeAdminPage()"
-          [isAdmin]="isAdmin()"
+          [isAdmin]="canUseAdmin()"
+          [isSystemAdmin]="isSystemAdmin()"
           (projectSelected)="dispatchProjectSelected($event)"
           (tabSelected)="dispatchTabSelected($event)"
           (adminPageSelected)="store.dispatch(adminPageSelected({page: $event}))"
@@ -119,11 +125,16 @@ import {
             [activeTab]="activeTab()"
             [activeAdminPage]="activeAdminPage()"
             [isAdmin]="isAdmin()"
+            [canUseAdmin]="canUseAdmin()"
+            [isSystemAdmin]="isSystemAdmin()"
+            [currentProjectRole]="currentProjectRole()"
             [projects]="projects()"
             [selectedProject]="selectedProject()"
             [currentUser]="currentUser()"
             [users]="users()"
             [activeUsers]="activeUsers()"
+            [projectMemberships]="projectMemberships()"
+            [memberCandidates]="projectMemberCandidates()"
             [workflow]="workflow()"
             [statuses]="statuses()"
             [projectTickets]="projectTickets()"
@@ -164,6 +175,9 @@ import {
             (userCreated)="store.dispatch(userCreateRequested($event))"
             (userUpdated)="store.dispatch(userUpdateRequested($event))"
             (temporaryPasswordRequested)="store.dispatch(userTemporaryPasswordRequested({user: $event}))"
+            (memberSearchRequested)="store.dispatch(projectMemberSearchRequested($event))"
+            (membershipSaved)="store.dispatch(projectMembershipSaveRequested($event))"
+            (membershipDeleted)="store.dispatch(projectMembershipDeleteRequested($event))"
             (ticketTypeCreated)="store.dispatch(ticketTypeCreateRequested({ request: $event }))"
             (ticketTypeUpdated)="store.dispatch(ticketTypeUpdateRequested($event))"
             (ticketTypeDeleted)="store.dispatch(ticketTypeDeleteRequested({ typeId: $event }))"
@@ -231,6 +245,11 @@ export class WorkspacePageComponent {
   protected readonly users = this.store.selectSignal(selectUsers);
   protected readonly activeUsers = this.store.selectSignal(selectActiveUsers);
   protected readonly isAdmin = this.store.selectSignal(selectIsAdmin);
+  protected readonly canUseAdmin = this.store.selectSignal(selectCanUseAdmin);
+  protected readonly isSystemAdmin = this.store.selectSignal(selectIsSystemAdmin);
+  protected readonly currentProjectRole = this.store.selectSignal(selectCurrentProjectRole);
+  protected readonly projectMemberships = this.store.selectSignal(selectProjectMemberships);
+  protected readonly projectMemberCandidates = this.store.selectSignal(selectProjectMemberCandidates);
   protected readonly activeTab = this.store.selectSignal(selectActiveTab);
   protected readonly activeAdminPage = this.store.selectSignal(selectActiveAdminPage);
   protected readonly workflow = this.store.selectSignal(selectSelectedWorkflow);
@@ -276,6 +295,9 @@ export class WorkspacePageComponent {
   protected readonly userCreateRequested = QueueActions.userCreateRequested;
   protected readonly userUpdateRequested = QueueActions.userUpdateRequested;
   protected readonly userTemporaryPasswordRequested = QueueActions.userTemporaryPasswordRequested;
+  protected readonly projectMemberSearchRequested = QueueActions.projectMemberSearchRequested;
+  protected readonly projectMembershipSaveRequested = QueueActions.projectMembershipSaveRequested;
+  protected readonly projectMembershipDeleteRequested = QueueActions.projectMembershipDeleteRequested;
   protected readonly adminPageSelected = QueueActions.adminPageSelected;
   protected readonly ticketTypeCreateRequested = QueueActions.ticketTypeCreateRequested;
   protected readonly ticketTypeUpdateRequested = QueueActions.ticketTypeUpdateRequested;

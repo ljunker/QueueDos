@@ -16,6 +16,7 @@ class DatabaseSeeder(
             seed.organizations.forEach(repositories.organizations::insert)
             seed.users.forEach(repositories.users::insert)
             seed.projects.forEach(repositories.projects::insert)
+            seed.projectMemberships.forEach(repositories.projectMemberships::upsert)
             seed.ticketTypes.forEach(repositories.ticketTypes::insert)
             seed.workflows.forEach(repositories.workflows::insert)
             seed.tickets.forEach { ticket ->

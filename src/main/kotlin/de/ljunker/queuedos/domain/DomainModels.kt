@@ -4,7 +4,13 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
 @Serializable
-enum class Role {
+enum class SystemRole {
+    SYSTEM_ADMIN,
+    USER
+}
+
+@Serializable
+enum class ProjectRole {
     ADMIN,
     MEMBER
 }
@@ -29,7 +35,7 @@ data class User(
     val organizationId: String,
     val email: String,
     val displayName: String,
-    val role: Role,
+    val systemRole: SystemRole,
     val active: Boolean,
     val passwordSalt: String,
     val passwordHash: String,
@@ -47,6 +53,13 @@ data class Project(
     val color: String = "#2563eb",
     val nextTicketNumber: Int = 1,
     val archived: Boolean = false
+)
+
+@Serializable
+data class ProjectMembership(
+    val projectId: String,
+    val userId: String,
+    val role: ProjectRole
 )
 
 @Serializable
@@ -72,7 +85,7 @@ data class WorkflowTransition(
     val id: String,
     val fromStatusId: String? = null,
     val toStatusId: String,
-    val allowedRoles: List<Role> = listOf(Role.ADMIN, Role.MEMBER),
+    val allowedRoles: List<ProjectRole> = listOf(ProjectRole.ADMIN, ProjectRole.MEMBER),
     val requiredFields: List<String> = emptyList(),
     val globalTransition: Boolean = false,
     val allowBackward: Boolean = true
@@ -222,6 +235,7 @@ data class AppData(
     val organizations: List<Organization> = emptyList(),
     val users: List<User> = emptyList(),
     val projects: List<Project> = emptyList(),
+    val projectMemberships: List<ProjectMembership> = emptyList(),
     val ticketTypes: List<TicketType> = emptyList(),
     val workflows: List<Workflow> = emptyList(),
     val tickets: List<Ticket> = emptyList(),
