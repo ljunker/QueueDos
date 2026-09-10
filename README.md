@@ -1,4 +1,23 @@
-# QueueDos
+<p align="center">
+  <a href="https://queue.kryptikk.de/">
+    <img src="docs/assets/queuedos-logo.svg" alt="QueueDos" width="320">
+  </a>
+</p>
+
+<h1 align="center">QueueDos</h1>
+
+<p align="center">
+  <em>Ein selbst gehostetes, Jira-ähnliches Ticketsystem für Teams —<br>
+  mit konfigurierbaren Workflows, Kanban-Board, rollenbasiertem Zugriff und Integrationen.</em>
+</p>
+
+<p align="center">
+  <img alt="Kotlin 2.4" src="https://img.shields.io/badge/Kotlin-2.4-7f52ff.svg">
+  <img alt="Ktor 3.5" src="https://img.shields.io/badge/Ktor-3.5-087cfa.svg">
+  <img alt="Angular 21" src="https://img.shields.io/badge/Angular-21-dd0031.svg">
+  <img alt="PostgreSQL" src="https://img.shields.io/badge/PostgreSQL-Flyway-4169e1.svg">
+  <a href="https://hub.docker.com/r/kryptikker/queuedos"><img alt="Docker: Multi-Arch" src="https://img.shields.io/badge/Docker-amd64%20%7C%20arm64-2496ed.svg"></a>
+</p>
 
 QueueDos ist ein Kotlin-MVP für ein Jira-ähnliches Ticketsystem. Die Anwendung läuft mit Ktor-REST-API, Angular-Frontend und PostgreSQL-Persistenz.
 
@@ -48,6 +67,10 @@ Wichtige Umgebungsvariablen:
 - `QUEUEDOS_SESSION_SECRET`: gemeinsamer HMAC-Schlüssel für stateless Session-Tokens.
 - `QUEUEDOS_SESSION_TTL_HOURS`: Token-Laufzeit in Stunden, Standard `12`.
 - `QUEUEDOS_PUBLIC_BASE_URL`: öffentliche Basis-URL für Microsoft-SSO-Redirects, z. B. `http://localhost:8080`.
+- `QUEUEDOS_MCP_ALLOWED_HOSTS`: optionale, kommaseparierte Liste erlaubter Hostnamen für `/mcp`. Ohne Angabe wird der
+  Host aus `QUEUEDOS_PUBLIC_BASE_URL` zusammen mit den lokalen Hostnamen verwendet.
+- `QUEUEDOS_MCP_ALLOWED_ORIGINS`: optionale, kommaseparierte Liste erlaubter Origins für `/mcp`. Ohne Angabe wird
+  `QUEUEDOS_PUBLIC_BASE_URL` zusammen mit lokalen Origins verwendet. Die Sicherheitsprüfung vergleicht Hostnamen.
 - `QUEUEDOS_MICROSOFT_CLIENT_ID` / `QUEUEDOS_MICROSOFT_CLIENT_SECRET`: aktivieren Microsoft-SSO.
 - `QUEUEDOS_MICROSOFT_TENANT`: Entra-Tenant für Microsoft-SSO, Standard `common`.
 - `QUEUEDOS_MICROSOFT_ALLOWED_DOMAINS`: kommaseparierte Liste erlaubter E-Mail-Domains für Microsoft-SSO, z. B.
@@ -65,6 +88,22 @@ E-Mail noch keinem QueueDos-Nutzer gehört und ihre Domain freigegeben ist, wird
 der Standardorganisation angelegt. Inaktive Nutzer werden nicht reaktiviert. Slack-Hooks werden im Admin-Bereich pro
 Activity-Ereignis konfiguriert; eine Vorlage kann Platzhalter wie `{{actorName}}`, `{{ticketKey}}`, `{{ticketTitle}}`,
 `{{comment}}`, `{{fromStatusId}}` oder `{{toStatusId}}` verwenden.
+
+## Persönlicher MCP-Zugriff
+
+Unter „API access“ kann jeder Nutzer persönliche MCP-Tokens erstellen und widerrufen. Ein Token wird nur unmittelbar
+nach dem Erstellen vollständig angezeigt, nach 90 Tagen ungültig und serverseitig ausschließlich als SHA-256-Hash
+gespeichert. Deaktivierung des Nutzers, Widerruf des Tokens und Änderungen an Projektrollen wirken sofort.
+
+Der stateless Streamable-HTTP-Endpunkt liegt unter:
+
+```text
+https://queuedos.example/mcp
+```
+
+Jeder POST benötigt `Authorization: Bearer <token>`. Der Server bietet Werkzeuge zum Auflisten von Projekten, Abrufen
+des Projektkontexts, Suchen und Lesen von Tickets sowie zum Erstellen, Ändern, Verschieben und Kommentieren. Sämtliche
+Mutationen verwenden dieselben Rechte-, Workflow-, Revisions- und Activity-Regeln wie die REST-Oberfläche.
 
 ## Zustandsprüfung
 
@@ -88,7 +127,9 @@ npm install
 npm start
 ```
 
-`npm start` startet den Angular-Dev-Server und proxyt `/api` an die Ktor-API auf `http://localhost:8080`. Das Subprojekt ist auf Angular 21 ausgelegt; dafür sollte Node.js 20.19+, 22.12+ oder 24 verwendet werden.
+`npm start` startet den Angular-Dev-Server und proxyt `/api` sowie `/mcp` an die Ktor-Anwendung auf
+`http://localhost:8080`. Das Subprojekt ist auf Angular 21 ausgelegt; dafür sollte Node.js 20.19+, 22.12+ oder 24
+verwendet werden.
 
 Der Docker-Build baut das Angular-Frontend in einer eigenen Node-Stage und kopiert das Ergebnis in die Ktor-Ressourcen, damit `http://localhost:8080` die Angular-App ausliefert.
 
