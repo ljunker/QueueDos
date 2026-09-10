@@ -39,6 +39,12 @@ class DatabaseMigrationTest {
                     assertTrue(it.getBoolean("local_login_enabled"))
                     assertEquals(false, it.getBoolean("must_change_password"))
                 }
+                statement.executeQuery(
+                    "SELECT count(*) FROM information_schema.columns WHERE table_name = 'queuedos_mcp_tokens'"
+                ).use {
+                    assertTrue(it.next())
+                    assertEquals(10, it.getInt(1))
+                }
             }
         }
     }

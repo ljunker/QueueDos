@@ -1,6 +1,6 @@
 plugins {
-    kotlin("jvm") version "2.0.21"
-    kotlin("plugin.serialization") version "2.0.21"
+    kotlin("jvm") version "2.4.0"
+    kotlin("plugin.serialization") version "2.4.0"
     application
 }
 
@@ -24,13 +24,14 @@ kotlin {
 }
 
 dependencies {
-    implementation("io.ktor:ktor-server-core-jvm:2.3.13")
-    implementation("io.ktor:ktor-server-netty-jvm:2.3.13")
-    implementation("io.ktor:ktor-server-auth-jvm:2.3.13")
-    implementation("io.ktor:ktor-server-call-logging-jvm:2.3.13")
-    implementation("io.ktor:ktor-server-content-negotiation-jvm:2.3.13")
-    implementation("io.ktor:ktor-server-status-pages-jvm:2.3.13")
-    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:2.3.13")
+    implementation("io.ktor:ktor-server-core-jvm:3.5.1")
+    implementation("io.ktor:ktor-server-netty-jvm:3.5.1")
+    implementation("io.ktor:ktor-server-auth-jvm:3.5.1")
+    implementation("io.ktor:ktor-server-call-logging-jvm:3.5.1")
+    implementation("io.ktor:ktor-server-content-negotiation-jvm:3.5.1")
+    implementation("io.ktor:ktor-server-status-pages-jvm:3.5.1")
+    implementation("io.ktor:ktor-serialization-kotlinx-json-jvm:3.5.1")
+    implementation("io.modelcontextprotocol:kotlin-sdk-server:0.15.0")
     implementation("ch.qos.logback:logback-classic:1.5.12")
     implementation("org.mindrot:jbcrypt:0.4")
     implementation("org.flywaydb:flyway-core:10.20.1")
@@ -38,11 +39,17 @@ dependencies {
     implementation("org.postgresql:postgresql:42.7.4")
 
     testImplementation(kotlin("test"))
-    testImplementation("io.ktor:ktor-server-test-host-jvm:2.3.13")
-    testImplementation("io.ktor:ktor-client-content-negotiation-jvm:2.3.13")
+    testImplementation("io.ktor:ktor-server-test-host-jvm:3.5.1")
+    testImplementation("io.ktor:ktor-client-content-negotiation-jvm:3.5.1")
     testImplementation("org.testcontainers:testcontainers-postgresql:2.0.5")
 }
 
 tasks.test {
     useJUnitPlatform()
+}
+
+tasks.jar {
+    manifest {
+        attributes["Implementation-Version"] = project.version.toString()
+    }
 }

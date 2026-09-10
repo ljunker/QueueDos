@@ -38,6 +38,25 @@ data class AuthConfigResponse(
 )
 
 @Serializable
+data class McpAccessTokenResponse(
+    val id: String,
+    val name: String,
+    val tokenHint: String,
+    val createdAt: String,
+    val expiresAt: String,
+    val lastUsedAt: String? = null
+)
+
+@Serializable
+data class CreateMcpAccessTokenRequest(val name: String)
+
+@Serializable
+data class CreatedMcpAccessTokenResponse(
+    val accessToken: McpAccessTokenResponse,
+    val token: String
+)
+
+@Serializable
 data class BootstrapResponse(
     val currentUser: UserResponse,
     val organizations: List<OrganizationResponse>,

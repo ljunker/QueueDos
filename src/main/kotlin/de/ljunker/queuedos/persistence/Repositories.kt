@@ -107,6 +107,15 @@ interface SavedTicketFilterRepository {
     fun delete(filterId: String)
 }
 
+interface McpAccessTokenRepository {
+    fun listActiveForOwner(organizationId: String, ownerId: String): List<McpAccessToken>
+    fun findActiveByHash(tokenHash: String): McpAccessToken?
+    fun findForOwner(organizationId: String, ownerId: String, tokenId: String): McpAccessToken?
+    fun insert(token: McpAccessToken)
+    fun markUsed(tokenId: String, usedAt: String)
+    fun revoke(tokenId: String, revokedAt: String)
+}
+
 data class QueueRepositories(
     val organizations: OrganizationRepository,
     val users: UserRepository,
@@ -116,5 +125,6 @@ data class QueueRepositories(
     val workflows: WorkflowRepository,
     val tickets: TicketRepository,
     val savedTicketFilters: SavedTicketFilterRepository,
-    val activityHooks: ActivityHookRepository
+    val activityHooks: ActivityHookRepository,
+    val mcpAccessTokens: McpAccessTokenRepository
 )

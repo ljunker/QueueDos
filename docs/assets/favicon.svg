@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title description">
+  <title id="title">QueueDos</title>
+  <desc id="description">Ein blaues Q mit einem grünen Haken.</desc>
+
+  <path
+    d="M 299.5 362.6 A 150 150 0 1 1 338.2 322.4"
+    fill="none"
+    stroke="#1d5fd6"
+    stroke-width="64"
+    stroke-linecap="round"
+  />
+  <path
+    d="M 286 320 L 340 374 L 454 250"
+    fill="none"
+    stroke="#1f8a4c"
+    stroke-width="64"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

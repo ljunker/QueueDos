@@ -1,9 +1,12 @@
 package de.ljunker.queuedos.api
 
 import de.ljunker.queuedos.application.*
+import de.ljunker.queuedos.config.appJson
 import de.ljunker.queuedos.domain.Priority
 import io.ktor.http.*
+import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
+import io.ktor.server.plugins.contentnegotiation.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -15,16 +18,21 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
             call.respondFrontendAsset("index.html")
         }
 
-        get("/api/health") {
+        route("/api") {
+        install(ContentNegotiation) {
+            json(appJson)
+        }
+
+        get("/health") {
             call.respond(HealthResponse(status = "ok"))
         }
 
-        post("/api/auth/login") {
+        post("/auth/login") {
             call.respond(services.auth.login(call.receive<LoginRequest>().toCommand()).toResponse())
         }
 
         passwordChangeAuthenticated {
-            post("/api/auth/change-password") {
+            post("/auth/change-password") {
                 call.respond(
                     services.auth.changePassword(call.actor(), call.receive<ChangePasswordRequest>().newPassword)
                         .toResponse()
@@ -32,11 +40,11 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
             }
         }
 
-        get("/api/auth/config") {
+        get("/auth/config") {
             call.respond(AuthConfigResponse(microsoftEnabled = services.microsoftSso.enabled))
         }
 
-        get("/api/auth/microsoft/start") {
+        get("/auth/microsoft/start") {
             val state = oauthSecret()
             val verifier = oauthSecret()
             call.authCookie(MICROSOFT_STATE_COOKIE, state)
@@ -44,7 +52,7 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
             call.respondRedirect(services.microsoftSso.authorizationUrl(state, pkceChallenge(verifier)))
         }
 
-        get("/api/auth/microsoft/callback") {
+        get("/auth/microsoft/callback") {
             val state = call.request.queryParameters["state"]
             val expectedState = call.request.cookies[MICROSOFT_STATE_COOKIE]
             val verifier = call.request.cookies[MICROSOFT_VERIFIER_COOKIE]
@@ -64,11 +72,11 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
         }
 
         authenticated {
-            get("/api/bootstrap") {
+            get("/bootstrap") {
                 call.respond(services.queries.bootstrap(call.actor()).toResponse())
             }
 
-            get("/api/tickets") {
+            get("/tickets") {
                 val actor = call.actor()
                 val query = call.request.queryParameters
                 call.respond(
@@ -86,23 +94,23 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            get("/api/tickets/{id}") {
+            get("/tickets/{id}") {
                 call.respond(services.queries.ticketDetail(call.actor(), call.pathId()).toResponse())
             }
 
-            get("/api/tickets/{id}/revisions") {
+            get("/tickets/{id}/revisions") {
                 val beforeVersion = call.request.queryParameters["beforeVersion"]?.toLongOrNull()
                 val limit = call.request.queryParameters["limit"]?.toIntOrNull() ?: 50
                 call.respond(services.queries.revisions(call.actor(), call.pathId(), beforeVersion, limit).toResponse())
             }
 
-            get("/api/tickets/{id}/revisions/{version}") {
+            get("/tickets/{id}/revisions/{version}") {
                 val version = call.parameters["version"]?.toLongOrNull()
                     ?: throw BadRequestFailure("Invalid ticket revision version.")
                 call.respond(services.queries.revision(call.actor(), call.pathId(), version).toDetailResponse())
             }
 
-            post("/api/tickets/{id}/revisions/{version}/restore") {
+            post("/tickets/{id}/revisions/{version}/restore") {
                 val version = call.parameters["version"]?.toLongOrNull()
                     ?: throw BadRequestFailure("Invalid ticket revision version.")
                 call.respond(
@@ -115,21 +123,21 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            post("/api/tickets") {
+            post("/tickets") {
                 call.respond(
                     HttpStatusCode.Created,
                     services.tickets.create(call.actor(), call.receive<CreateTicketRequest>().toCommand()).toResponse()
                 )
             }
 
-            post("/api/tickets/bulk-update") {
+            post("/tickets/bulk-update") {
                 call.respond(
                     services.tickets.bulkUpdate(call.actor(), call.receive<BulkUpdateTicketsRequest>().toCommand())
                         .map { it.toResponse() }
                 )
             }
 
-            put("/api/tickets/{id}") {
+            put("/tickets/{id}") {
                 call.respond(
                     services.tickets.update(
                         call.actor(),
@@ -139,7 +147,7 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            post("/api/tickets/{id}/transition") {
+            post("/tickets/{id}/transition") {
                 call.respond(
                     services.tickets.transition(
                         call.actor(),
@@ -149,7 +157,7 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            post("/api/tickets/{id}/comments") {
+            post("/tickets/{id}/comments") {
                 call.respond(
                     HttpStatusCode.Created,
                     services.tickets.addComment(
@@ -160,7 +168,7 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            post("/api/tickets/{id}/commitment") {
+            post("/tickets/{id}/commitment") {
                 call.respond(
                     services.tickets.saveCommitment(
                         call.actor(),
@@ -170,14 +178,14 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            delete("/api/tickets/{id}") {
+            delete("/tickets/{id}") {
                 val expectedVersion = call.request.queryParameters["expectedVersion"]?.toLongOrNull()
                     ?: throw BadRequestFailure("expectedVersion is required.")
                 services.tickets.delete(call.actor(), call.pathId(), expectedVersion)
                 call.respond(HttpStatusCode.NoContent)
             }
 
-            post("/api/tickets/{id}/restore") {
+            post("/tickets/{id}/restore") {
                 call.respond(
                     services.tickets.restore(
                         call.actor(),
@@ -187,7 +195,7 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            post("/api/projects") {
+            post("/projects") {
                 call.respond(
                     HttpStatusCode.Created,
                     services.projects.create(call.actor(), call.receive<CreateProjectRequest>().toCommand())
@@ -195,7 +203,7 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            put("/api/projects/{id}") {
+            put("/projects/{id}") {
                 call.respond(
                     services.projects.update(
                         call.actor(),
@@ -205,43 +213,43 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            delete("/api/projects/{id}") {
+            delete("/projects/{id}") {
                 services.projects.delete(call.actor(), call.pathId())
                 call.respond(HttpStatusCode.NoContent)
             }
 
-            get("/api/projects/{id}/member-candidates") {
+            get("/projects/{id}/member-candidates") {
                 val query = call.request.queryParameters["q"].orEmpty()
                 call.respond(services.projectMemberships.candidates(call.actor(), call.pathId(), query).map { it.toResponse() })
             }
 
-            put("/api/projects/{id}/members/{userId}") {
+            put("/projects/{id}/members/{userId}") {
                 val userId = call.parameters["userId"] ?: throw BadRequestFailure("Missing user id.")
                 val request = call.receive<UpdateProjectMembershipRequest>()
                 call.respond(services.projectMemberships.save(call.actor(), call.pathId(), userId, request.role).toResponse())
             }
 
-            delete("/api/projects/{id}/members/{userId}") {
+            delete("/projects/{id}/members/{userId}") {
                 val userId = call.parameters["userId"] ?: throw BadRequestFailure("Missing user id.")
                 services.projectMemberships.delete(call.actor(), call.pathId(), userId)
                 call.respond(HttpStatusCode.NoContent)
             }
 
-            post("/api/users") {
+            post("/users") {
                 call.respond(
                     HttpStatusCode.Created,
                     services.users.create(call.actor(), call.receive<CreateUserRequest>().toCommand()).toResponse()
                 )
             }
 
-            put("/api/users/{id}") {
+            put("/users/{id}") {
                 call.respond(
                     services.users.update(call.actor(), call.pathId(), call.receive<UpdateUserRequest>().toCommand())
                         .toResponse()
                 )
             }
 
-            post("/api/users/{id}/temporary-password") {
+            post("/users/{id}/temporary-password") {
                 call.respond(
                     TemporaryPasswordResponse(
                         services.users.generateTemporaryPassword(call.actor(), call.pathId())
@@ -249,7 +257,7 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            post("/api/ticket-types") {
+            post("/ticket-types") {
                 call.respond(
                     HttpStatusCode.Created,
                     services.ticketTypes.create(call.actor(), call.receive<CreateTicketTypeRequest>().toCommand())
@@ -257,7 +265,7 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            put("/api/ticket-types/{id}") {
+            put("/ticket-types/{id}") {
                 call.respond(
                     services.ticketTypes.update(
                         call.actor(),
@@ -268,12 +276,12 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            delete("/api/ticket-types/{id}") {
+            delete("/ticket-types/{id}") {
                 services.ticketTypes.delete(call.actor(), call.pathId())
                 call.respond(HttpStatusCode.NoContent)
             }
 
-            put("/api/projects/{id}/workflow") {
+            put("/projects/{id}/workflow") {
                 call.respond(
                     services.workflows.save(
                         call.actor(),
@@ -283,7 +291,7 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            post("/api/saved-ticket-filters") {
+            post("/saved-ticket-filters") {
                 call.respond(
                     HttpStatusCode.Created,
                     services.savedTicketFilters.create(
@@ -293,7 +301,7 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            put("/api/saved-ticket-filters/{id}") {
+            put("/saved-ticket-filters/{id}") {
                 call.respond(
                     services.savedTicketFilters.update(
                         call.actor(),
@@ -303,12 +311,12 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            delete("/api/saved-ticket-filters/{id}") {
+            delete("/saved-ticket-filters/{id}") {
                 services.savedTicketFilters.delete(call.actor(), call.pathId())
                 call.respond(HttpStatusCode.NoContent)
             }
 
-            post("/api/activity-hooks") {
+            post("/activity-hooks") {
                 call.respond(
                     HttpStatusCode.Created,
                     services.activityHooks.create(call.actor(), call.receive<CreateActivityHookRequest>().toCommand())
@@ -316,7 +324,7 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            put("/api/activity-hooks/{id}") {
+            put("/activity-hooks/{id}") {
                 call.respond(
                     services.activityHooks.update(
                         call.actor(),
@@ -326,10 +334,28 @@ internal fun Application.configureRoutes(services: QueueDosServices) {
                 )
             }
 
-            delete("/api/activity-hooks/{id}") {
+            delete("/activity-hooks/{id}") {
                 services.activityHooks.delete(call.actor(), call.pathId())
                 call.respond(HttpStatusCode.NoContent)
             }
+
+            get("/mcp-tokens") {
+                call.respond(services.mcpAccessTokens.list(call.actor()).map { it.toResponse() })
+            }
+
+            post("/mcp-tokens") {
+                call.respond(
+                    HttpStatusCode.Created,
+                    services.mcpAccessTokens.create(call.actor(), call.receive<CreateMcpAccessTokenRequest>().name)
+                        .toResponse()
+                )
+            }
+
+            delete("/mcp-tokens/{id}") {
+                services.mcpAccessTokens.revoke(call.actor(), call.pathId())
+                call.respond(HttpStatusCode.NoContent)
+            }
+        }
         }
 
         get("/{assetPath...}") {
@@ -378,7 +404,11 @@ private fun ApplicationCall.expireAuthCookie(name: String) {
 
 private suspend fun ApplicationCall.respondFrontendAsset(path: String) {
     val normalized = path.trim('/').ifBlank { "index.html" }
-    if (normalized == "api" || normalized.startsWith("api/") || normalized.contains("..")) {
+    if (
+        normalized == "api" || normalized.startsWith("api/") ||
+        normalized == "mcp" || normalized.startsWith("mcp/") ||
+        normalized.contains("..")
+    ) {
         throw NotFoundFailure("Resource not found.")
     }
 

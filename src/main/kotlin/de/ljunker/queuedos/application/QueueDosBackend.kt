@@ -43,6 +43,7 @@ class QueueDosBackend private constructor(
                     ticketTypes = TicketTypeService(transactions, repositories),
                     workflows = WorkflowService(transactions, repositories),
                     tickets = TicketService(transactions, repositories, activityNotifier),
+                    mcpAccessTokens = McpAccessTokenService(transactions, repositories),
                     savedTicketFilters = SavedTicketFilterService(transactions, repositories),
                     activityHooks = ActivityHookService(transactions, repositories)
                 )

@@ -473,6 +473,7 @@ function isWorkspaceTab(value: string | null): value is WorkspaceTab {
     value === 'dashboard' ||
     value === 'list' ||
     value === 'my-tickets' ||
+    value === 'api-access' ||
     value === 'detail' ||
     value === 'admin';
 }

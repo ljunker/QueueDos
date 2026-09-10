@@ -180,6 +180,19 @@ data class TicketChange(
     val createdAt: String
 )
 
+data class McpAccessToken(
+    val id: String,
+    val organizationId: String,
+    val ownerId: String,
+    val name: String,
+    val tokenHash: String,
+    val tokenHint: String,
+    val createdAt: String,
+    val expiresAt: String,
+    val lastUsedAt: String? = null,
+    val revokedAt: String? = null
+)
+
 @Serializable
 enum class SavedTicketFilterView {
     PROJECT_LIST,

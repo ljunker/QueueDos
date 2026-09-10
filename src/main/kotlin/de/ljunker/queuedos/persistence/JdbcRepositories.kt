@@ -23,7 +23,8 @@ class JdbcQueueRepositories(
             workflows = JdbcWorkflowRepository(transactionRunner),
             tickets = JdbcTicketRepository(transactionRunner, json),
             savedTicketFilters = JdbcSavedTicketFilterRepository(transactionRunner, json),
-            activityHooks = JdbcActivityHookRepository(transactionRunner)
+            activityHooks = JdbcActivityHookRepository(transactionRunner),
+            mcpAccessTokens = JdbcMcpAccessTokenRepository(transactionRunner)
         )
 }
 
@@ -1275,6 +1276,86 @@ private class JdbcActivityHookRepository(
     private fun connection() = transactions.connection()
 }
 
+private class JdbcMcpAccessTokenRepository(
+    private val transactions: JdbcTransactionRunner
+) : McpAccessTokenRepository {
+    override fun listActiveForOwner(organizationId: String, ownerId: String): List<McpAccessToken> =
+        connection().query(
+            """
+            SELECT id, organization_id, owner_id, name, token_hash, token_hint,
+                   created_at, expires_at, last_used_at, revoked_at
+            FROM queuedos_mcp_tokens
+            WHERE organization_id = ? AND owner_id = ? AND revoked_at IS NULL
+            ORDER BY created_at DESC, id
+            """.trimIndent(),
+            organizationId,
+            ownerId
+        ) { mcpAccessToken(it) }
+
+    override fun findActiveByHash(tokenHash: String): McpAccessToken? =
+        connection().queryOne(
+            """
+            SELECT id, organization_id, owner_id, name, token_hash, token_hint,
+                   created_at, expires_at, last_used_at, revoked_at
+            FROM queuedos_mcp_tokens
+            WHERE token_hash = ? AND revoked_at IS NULL
+            """.trimIndent(),
+            tokenHash
+        ) { mcpAccessToken(it) }
+
+    override fun findForOwner(organizationId: String, ownerId: String, tokenId: String): McpAccessToken? =
+        connection().queryOne(
+            """
+            SELECT id, organization_id, owner_id, name, token_hash, token_hint,
+                   created_at, expires_at, last_used_at, revoked_at
+            FROM queuedos_mcp_tokens
+            WHERE organization_id = ? AND owner_id = ? AND id = ?
+            """.trimIndent(),
+            organizationId,
+            ownerId,
+            tokenId
+        ) { mcpAccessToken(it) }
+
+    override fun insert(token: McpAccessToken) {
+        connection().execute(
+            """
+            INSERT INTO queuedos_mcp_tokens
+                (id, organization_id, owner_id, name, token_hash, token_hint,
+                 created_at, expires_at, last_used_at, revoked_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """.trimIndent(),
+            token.id,
+            token.organizationId,
+            token.ownerId,
+            token.name,
+            token.tokenHash,
+            token.tokenHint,
+            token.createdAt,
+            token.expiresAt,
+            token.lastUsedAt,
+            token.revokedAt
+        )
+    }
+
+    override fun markUsed(tokenId: String, usedAt: String) {
+        connection().execute(
+            "UPDATE queuedos_mcp_tokens SET last_used_at = ? WHERE id = ? AND revoked_at IS NULL",
+            usedAt,
+            tokenId
+        )
+    }
+
+    override fun revoke(tokenId: String, revokedAt: String) {
+        connection().execute(
+            "UPDATE queuedos_mcp_tokens SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL",
+            revokedAt,
+            tokenId
+        )
+    }
+
+    private fun connection() = transactions.connection()
+}
+
 private fun user(result: ResultSet): User =
     User(
         id = result.getString("id"),
@@ -1331,6 +1412,20 @@ private fun change(result: ResultSet): TicketChange =
         oldValue = result.getString("old_value"),
         newValue = result.getString("new_value"),
         createdAt = result.getString("created_at")
+    )
+
+private fun mcpAccessToken(result: ResultSet): McpAccessToken =
+    McpAccessToken(
+        id = result.getString("id"),
+        organizationId = result.getString("organization_id"),
+        ownerId = result.getString("owner_id"),
+        name = result.getString("name"),
+        tokenHash = result.getString("token_hash"),
+        tokenHint = result.getString("token_hint"),
+        createdAt = result.getString("created_at"),
+        expiresAt = result.getString("expires_at"),
+        lastUsedAt = result.getString("last_used_at"),
+        revokedAt = result.getString("revoked_at")
     )
 
 private fun Connection.exists(sql: String, vararg values: Any?): Boolean =

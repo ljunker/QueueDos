@@ -21,6 +21,7 @@ class QueueDosServices(
     val ticketTypes: TicketTypeService,
     val workflows: WorkflowService,
     val tickets: TicketService,
+    val mcpAccessTokens: McpAccessTokenService,
     val savedTicketFilters: SavedTicketFilterService,
     val activityHooks: ActivityHookService
 )

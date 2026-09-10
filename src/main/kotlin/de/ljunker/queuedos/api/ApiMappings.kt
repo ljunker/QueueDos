@@ -5,6 +5,12 @@ import de.ljunker.queuedos.domain.*
 
 internal fun LoginRequest.toCommand() = LoginCommand(email, password)
 
+internal fun McpAccessToken.toResponse() =
+    McpAccessTokenResponse(id, name, tokenHint, createdAt, expiresAt, lastUsedAt)
+
+internal fun CreatedMcpAccessToken.toResponse() =
+    CreatedMcpAccessTokenResponse(accessToken.toResponse(), token)
+
 internal fun CreateProjectRequest.toCommand() =
     CreateProjectCommand(
         key,

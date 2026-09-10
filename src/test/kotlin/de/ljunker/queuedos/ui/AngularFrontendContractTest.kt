@@ -85,6 +85,23 @@ class AngularFrontendContractTest {
     }
 
     @Test
+    fun personalMcpAccessIsAvailableToEveryUser() {
+        val sidebar = projectFile("frontend/src/app/shared/organisms/sidebar.component.ts")
+        val host = projectFile("frontend/src/app/shared/organisms/workspace-tab-host.component.ts")
+        val view = projectFile("frontend/src/app/shared/organisms/api-access-view.component.ts")
+        val client = projectFile("frontend/src/app/core/api-client.service.ts")
+        val proxy = projectFile("frontend/proxy.conf.json")
+
+        assertContains(sidebar, "API access")
+        assertContains(host, "@case ('api-access')")
+        assertContains(view, "Copy your new token now")
+        assertContains(view, "createdToken.set(null)")
+        assertContains(client, "createMcpToken")
+        assertContains(client, "revokeMcpToken")
+        assertContains(proxy, "\"/mcp\"")
+    }
+
+    @Test
     fun projectWizardAndProjectSpecificConfigurationArePresent() {
         val wizard = projectFile("frontend/src/app/shared/organisms/project-wizard.component.ts")
         val projects = projectFile("frontend/src/app/shared/organisms/admin-projects-panel.component.ts")

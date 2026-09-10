@@ -835,6 +835,97 @@ qd-admin-users-panel {
   background: var(--surface);
 }
 
+.api-access-view {
+  display: grid;
+  gap: 1rem;
+}
+
+.api-access-connect {
+  max-width: 900px;
+}
+
+.api-access-details {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1rem 0 0;
+}
+
+.api-access-details div {
+  display: grid;
+  grid-template-columns: 7rem minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.api-access-details dt {
+  color: var(--muted);
+}
+
+.api-access-details dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.api-access-details code,
+.api-token-secret-value code,
+.api-token-row code {
+  overflow-wrap: anywhere;
+}
+
+.api-token-secret {
+  border-color: var(--primary);
+}
+
+.api-token-secret-value {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 0.6rem;
+  background: var(--surface-2);
+}
+
+.api-token-secret-value code {
+  flex: 1;
+  user-select: all;
+}
+
+.api-token-create {
+  display: flex;
+  align-items: end;
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.api-token-create label {
+  display: grid;
+  flex: 1;
+  gap: 0.35rem;
+}
+
+.api-token-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.api-token-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.api-token-row > div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.api-token-row small {
+  color: var(--muted);
+}
+
 .panel.wide {
   grid-column: 1 / -1;
 }
@@ -1682,6 +1773,17 @@ qd-admin-users-panel {
   .user-password-action,
   .temporary-password-value {
     grid-template-columns: 1fr;
+  }
+
+  .api-access-details div {
+    grid-template-columns: 1fr;
+  }
+
+  .api-token-create,
+  .api-token-row,
+  .api-token-secret-value {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .toast {

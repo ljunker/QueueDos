@@ -203,6 +203,20 @@ export interface AuthConfigResponse {
   microsoftEnabled: boolean;
 }
 
+export interface McpAccessToken {
+  id: string;
+  name: string;
+  tokenHint: string;
+  createdAt: string;
+  expiresAt: string;
+  lastUsedAt: string | null;
+}
+
+export interface CreatedMcpAccessToken {
+  accessToken: McpAccessToken;
+  token: string;
+}
+
 export type ActivityEventType =
     | 'TICKET_CREATED'
     | 'TICKET_UPDATED'
@@ -245,6 +259,10 @@ export interface TicketDetailResponse {
 
 export interface CreateTicketCommentRequest {
   body: string;
+}
+
+export interface CreateMcpAccessTokenRequest {
+  name: string;
 }
 
 export interface SaveTicketCommitmentRequest {

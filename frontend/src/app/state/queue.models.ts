@@ -8,7 +8,7 @@ import {
   WorkflowTransition
 } from '../core/api.models';
 
-export type WorkspaceTab = 'board' | 'dashboard' | 'list' | 'my-tickets' | 'detail' | 'admin';
+export type WorkspaceTab = 'board' | 'dashboard' | 'list' | 'my-tickets' | 'api-access' | 'detail' | 'admin';
 export type AdminPage = 'overview' | 'users' | 'projects' | 'configuration' | 'members' | 'integrations' | 'trash';
 export type DetailReturnTab = Exclude<WorkspaceTab, 'detail'>;
 export type TicketSort = 'number' | 'title' | 'priority' | 'status' | 'updated';

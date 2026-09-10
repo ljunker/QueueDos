@@ -37,6 +37,7 @@ import {
   WorkspaceTab
 } from '../../state/queue.models';
 import {AdminViewComponent} from './admin-view.component';
+import {ApiAccessViewComponent} from './api-access-view.component';
 import {BoardViewComponent} from './board-view.component';
 import {MyTicketsViewComponent} from './my-tickets-view.component';
 import {ProjectDashboardViewComponent} from './project-dashboard-view.component';
@@ -48,6 +49,7 @@ import {TicketListViewComponent} from './ticket-list-view.component';
   standalone: true,
   imports: [
     AdminViewComponent,
+    ApiAccessViewComponent,
     BoardViewComponent,
     MyTicketsViewComponent,
     ProjectDashboardViewComponent,
@@ -115,6 +117,9 @@ import {TicketListViewComponent} from './ticket-list-view.component';
             (savedFilterRenamed)="savedFilterRenamed.emit($event)"
             (savedFilterDeleted)="savedFilterDeleted.emit($event)"
             (bulkUpdateRequested)="bulkUpdateRequested.emit($event)" />
+        }
+        @case ('api-access') {
+          <qd-api-access-view />
         }
         @case ('detail') {
           <qd-ticket-detail-view

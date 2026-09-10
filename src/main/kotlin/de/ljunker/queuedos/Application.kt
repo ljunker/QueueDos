@@ -8,14 +8,14 @@ import de.ljunker.queuedos.application.MicrosoftSsoSettings
 import de.ljunker.queuedos.application.QueueDosBackend
 import de.ljunker.queuedos.application.parseMicrosoftAllowedDomains
 import de.ljunker.queuedos.config.appJson
+import de.ljunker.queuedos.mcp.McpHttpSettings
+import de.ljunker.queuedos.mcp.configureMcp
 import de.ljunker.queuedos.persistence.DriverManagerDataSource
 import de.ljunker.queuedos.security.AuthTokenCodec
-import io.ktor.serialization.kotlinx.json.*
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
-import io.ktor.server.plugins.callloging.*
-import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.plugins.calllogging.*
 import java.time.Duration
 
 fun main() {
@@ -26,14 +26,13 @@ fun main() {
 }
 
 fun Application.module(
-    backend: QueueDosBackend = backendFromEnvironment()
+    backend: QueueDosBackend = backendFromEnvironment(),
+    mcpSettings: McpHttpSettings = McpHttpSettings.fromEnvironment()
 ) {
     install(CallLogging)
-    install(ContentNegotiation) {
-        json(appJson)
-    }
     configureStatusPages()
     configureApiAuthentication(backend.services.auth)
+    configureMcp(backend.services, mcpSettings)
     configureRoutes(backend.services)
 }
 

@@ -7,6 +7,8 @@ import {
   BulkUpdateTicketsRequest,
   ChangePasswordRequest,
   CreateActivityHookRequest,
+  CreatedMcpAccessToken,
+  CreateMcpAccessTokenRequest,
   CreateProjectRequest,
   CreateSavedTicketFilterRequest,
   CreateTicketCommentRequest,
@@ -15,6 +17,7 @@ import {
   CreateUserRequest,
   LoginRequest,
   LoginResponse,
+  McpAccessToken,
   Project,
   ProjectMembership,
   PublicUser,
@@ -50,6 +53,18 @@ export class ApiClientService {
 
   authConfig() {
     return this.http.get<AuthConfigResponse>('/api/auth/config');
+  }
+
+  mcpTokens() {
+    return this.http.get<McpAccessToken[]>('/api/mcp-tokens');
+  }
+
+  createMcpToken(request: CreateMcpAccessTokenRequest) {
+    return this.http.post<CreatedMcpAccessToken>('/api/mcp-tokens', request);
+  }
+
+  revokeMcpToken(id: string) {
+    return this.http.delete<void>(`/api/mcp-tokens/${id}`);
   }
 
   bootstrap() {
