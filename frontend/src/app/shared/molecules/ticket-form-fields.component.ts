@@ -18,6 +18,7 @@ import { TicketFormGroup } from '../models/ticket-form.model';
       <label>
         Description
         <textarea rows="5" formControlName="description"></textarea>
+        <small class="field-hint">Markdown supported</small>
       </label>
 
       <div class="form-grid">

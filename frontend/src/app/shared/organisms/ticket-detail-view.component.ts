@@ -1,6 +1,7 @@
 import {ChangeDetectionStrategy, Component, input, output} from '@angular/core';
 
 import {PublicUser, Ticket, TicketChange, TicketComment, TicketRevisionDetail, TicketRevisionPage, TicketRevisionSummary, TicketType, Workflow} from '../../core/api.models';
+import {MarkdownContentComponent} from '../atoms/markdown-content.component';
 import {TicketCommentsPanelComponent} from './ticket-comments-panel.component';
 import {TicketHistoryPanelComponent} from './ticket-history-panel.component';
 import {TicketSummaryPanelComponent} from './ticket-summary-panel.component';
@@ -8,7 +9,7 @@ import {TicketSummaryPanelComponent} from './ticket-summary-panel.component';
 @Component({
   selector: 'qd-ticket-detail-view',
   standalone: true,
-  imports: [TicketCommentsPanelComponent, TicketHistoryPanelComponent, TicketSummaryPanelComponent],
+  imports: [MarkdownContentComponent, TicketCommentsPanelComponent, TicketHistoryPanelComponent, TicketSummaryPanelComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     @if (ticket(); as selectedTicket) {
@@ -50,7 +51,11 @@ import {TicketSummaryPanelComponent} from './ticket-summary-panel.component';
               </header>
               <div class="dialog-body">
                 <p><strong>{{ detail.snapshot.title }}</strong></p>
-                <p>{{ detail.snapshot.description || 'No description' }}</p>
+                @if (detail.snapshot.description) {
+                  <qd-markdown-content [content]="detail.snapshot.description" />
+                } @else {
+                  <p class="muted">No description</p>
+                }
                 <dl>
                   <dt>Status</dt><dd>{{ detail.snapshot.statusId }}</dd>
                   <dt>Type</dt><dd>{{ detail.snapshot.typeId }}</dd>

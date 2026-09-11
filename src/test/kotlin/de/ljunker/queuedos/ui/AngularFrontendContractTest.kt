@@ -64,6 +64,32 @@ class AngularFrontendContractTest {
     }
 
     @Test
+    fun ticketTextUsesSafeMarkdownRendering() {
+        val packageJson = projectFile("frontend/package.json")
+        val markdown = projectFile("frontend/src/app/shared/atoms/markdown-content.component.ts")
+        val summary = projectFile("frontend/src/app/shared/organisms/ticket-summary-panel.component.ts")
+        val comments = projectFile("frontend/src/app/shared/organisms/ticket-comments-panel.component.ts")
+        val detail = projectFile("frontend/src/app/shared/organisms/ticket-detail-view.component.ts")
+        val formFields = projectFile("frontend/src/app/shared/molecules/ticket-form-fields.component.ts")
+
+        assertContains(packageJson, "\"marked\": \"18.0.12\"")
+        assertContains(markdown, "selector: 'qd-markdown-content'")
+        assertContains(markdown, "gfm: true")
+        assertContains(markdown, "breaks: true")
+        assertContains(markdown, "html({text})")
+        assertContains(markdown, "image({href, title, text})")
+        assertContains(markdown, "target=\"_blank\"")
+        assertContains(markdown, "rel=\"noopener noreferrer\"")
+        assertFalse("bypassSecurityTrustHtml" in markdown)
+        assertFalse("<img" in markdown)
+        assertContains(summary, "<qd-markdown-content")
+        assertContains(comments, "<qd-markdown-content")
+        assertContains(detail, "<qd-markdown-content")
+        assertContains(comments, "Markdown supported")
+        assertContains(formFields, "Markdown supported")
+    }
+
+    @Test
     fun ticketWorkViewsArePresent() {
         val workspace = projectFile("frontend/src/app/pages/workspace/workspace-page.component.ts")
         val host = projectFile("frontend/src/app/shared/organisms/workspace-tab-host.component.ts")

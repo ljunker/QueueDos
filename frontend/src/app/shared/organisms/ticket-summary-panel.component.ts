@@ -3,16 +3,21 @@ import {ChangeDetectionStrategy, Component, input, output} from '@angular/core';
 import {PublicUser, Ticket, TicketType, Workflow} from '../../core/api.models';
 import {priorityLabel, statusById, typeById, userById} from '../../state/queue.selectors';
 import {BadgeComponent} from '../atoms/badge.component';
+import {MarkdownContentComponent} from '../atoms/markdown-content.component';
 
 @Component({
   selector: 'qd-ticket-summary-panel',
   standalone: true,
-  imports: [BadgeComponent],
+  imports: [BadgeComponent, MarkdownContentComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="panel">
       <h3>Details</h3>
-      <p>{{ ticket().description || 'No description' }}</p>
+      @if (ticket().description) {
+        <qd-markdown-content [content]="ticket().description" />
+      } @else {
+        <p class="muted">No description</p>
+      }
       <div class="badges">
         <qd-badge>{{ statusById(workflow(), ticket().statusId)?.name ?? 'Status' }}</qd-badge>
         <qd-badge [dotColor]="typeById(types(), ticket().typeId)?.color ?? '#667085'">
