@@ -312,6 +312,6 @@ function projectKey(projects: Project[], projectId: string): string {
   return projects.find((project) => project.id === projectId)?.key ?? '';
 }
 
-function priorityRank(priority: Priority): number {
+export function priorityRank(priority: Priority): number {
   return ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].indexOf(priority);
 }
