@@ -501,19 +501,24 @@ class McpRoutesTest {
         assertEquals(4, transitioned["version"]!!.jsonPrimitive.int)
         assertEquals(transitionName, transitioned["statusName"]!!.jsonPrimitive.content)
 
+        val commentBody = """
+            The requirements review found several product decisions that must be clarified before implementation.
+            Please define the exact completion format, the files included in suggestions, and how ambiguous or missing
+            targets should behave so the ticket can be implemented without guessing.
+        """.trimIndent()
         val comment = structured(
             callTool(
                 client,
                 token,
                 "queuedos_add_comment",
-                obj("ticketKey" to JsonPrimitive(ticketKey), "body" to JsonPrimitive("Agent note"))
+                obj("ticketKey" to JsonPrimitive(ticketKey), "body" to JsonPrimitive(commentBody))
             )
         )["comment"]!!.jsonObject
         assertEquals("member@queuedos.local", comment["authorEmail"]!!.jsonPrimitive.content)
         val withComment = structured(
             callTool(client, token, "queuedos_get_ticket", obj("ticketKey" to JsonPrimitive(ticketKey)))
         )
-        assertTrue(withComment["comments"]!!.jsonArray.any { it.jsonObject["body"]!!.jsonPrimitive.content == "Agent note" })
+        assertTrue(withComment["comments"]!!.jsonArray.any { it.jsonObject["body"]!!.jsonPrimitive.content == commentBody })
 
         services.projects.update(admin, visible.id, UpdateProjectCommand(null, null, null, true))
         val archivedFailure = callTool(

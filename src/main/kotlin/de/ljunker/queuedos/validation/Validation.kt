@@ -46,6 +46,17 @@ internal fun requireName(value: String, label: String): String {
     return name
 }
 
+internal fun requireComment(value: String): String {
+    val comment = value.trim()
+    if (comment.isBlank()) {
+        throw BadRequestFailure("Comment is required.")
+    }
+    if (comment.length > 10_000) {
+        throw BadRequestFailure("Comment must be 10000 characters or fewer.")
+    }
+    return comment
+}
+
 internal fun requirePassword(value: String): String {
     if (value.length < 8) {
         throw BadRequestFailure("Password must have at least 8 characters.")

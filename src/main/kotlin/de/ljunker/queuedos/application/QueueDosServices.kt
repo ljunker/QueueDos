@@ -853,7 +853,7 @@ class TicketService(
                 organizationId = actor.organizationId,
                 ticketId = ticket.id,
                 authorId = actor.id,
-                body = requireName(command.body, "Comment"),
+                body = requireComment(command.body),
                 createdAt = timestamp
             ).also { comment ->
                 repositories.tickets.insertComment(comment)
